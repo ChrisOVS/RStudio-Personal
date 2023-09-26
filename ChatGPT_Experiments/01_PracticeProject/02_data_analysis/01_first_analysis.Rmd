@@ -23,13 +23,169 @@ source(paste0(project_dr, "01_data/datapull.R"))
 ```{r}
 data_df %>% head()
 data <- data_df
-data$`Date Recorded` <- as.Date.character(data$`Date Recorded`, format = "%m/%d/%Y")
-data %>% head()
 
 write_csv(data, file = paste0(data_path, "HousePriceData.csv"))
 ```
 
+
 ```{r}
-data
+rm(data_df)
 ```
+
+
+```{r}
+#Create Cost column
+data <- data %>% mutate(Cost = case_when(`Sale Amount` >= 1000000 ~ 1000000, 
+                                         T ~ `Sale Amount`))
+
+# Create a new column for the year
+data$Year <- lubridate::year(data$`Date Recorded`)
+
+# Create a new column for the month
+data$Month <- lubridate::month(data$`Date Recorded`)
+
+head(data)
+```
+
+
+```{r}
+summary(data)
+```
+
+# Data Aggregation 
+```{r}
+# Aggregate by Year
+yearly_data <- data %>%
+  mutate(Year = year(`Date Recorded`)) %>%
+  group_by(Year) %>%
+  summarise(Mean_Cost = mean(Cost, na.rm = TRUE), Median_Cost = median(Cost, na.rm = TRUE))
+
+# Aggregate by Month
+monthly_data <- data %>%
+  mutate(Month = month(`Date Recorded`)) %>%
+  group_by(Month) %>%
+  summarise(Mean_Cost = mean(Cost, na.rm = TRUE), Median_Cost = median(Cost, na.rm = TRUE))
+
+```
+
+
+
+
+# Yearly Trends in Housing Costs
+```{r}
+# Create the plot
+plot_ly(yearly_data, x = ~Year, y = ~Mean_Cost, type = 'scatter', mode = 'lines') %>%
+  layout(title = "Yearly Trends in Housing Costs",
+         xaxis = list(title = "Year"),
+         yaxis = list(title = "Mean_Cost"))
+
+```
+
+
+
+```{r}
+# Create the line plot for mean costs
+plot <- plot_ly(yearly_data, x = ~Year, y = ~Mean_Cost, type = 'scatter', mode = 'lines', name = 'Mean Cost') 
+
+# Add median line
+plot <- add_trace(plot, x = ~Year, y = ~Median_Cost, type = 'scatter', mode = 'lines', name = 'Median Cost')
+
+# Add layout
+plot <- layout(plot, title = "Yearly Trends in Housing Costs",
+               xaxis = list(title = "Year"),
+               yaxis = list(title = "Cost"))
+
+plot
+
+```
+
+
+
+
+# Monthly Seasonality
+```{r}
+# Create the boxplot
+plot_ly(monthly_data, y = ~Mean_Cost, x = ~Month, type = "box") %>%
+  layout(title = "Monthly Variation in Housing Costs",
+         xaxis = list(title = "Month"),
+         yaxis = list(title = "Mean_Cost"))
+
+```
+
+
+```{r}
+# Create the line plot for mean costs
+plot <- plot_ly(monthly_data, x = ~Month, y = ~Mean_Cost, type = 'scatter', mode = 'lines', name = 'Mean Cost') 
+
+# Add median line
+plot <- add_trace(plot, x = ~Month, y = ~Median_Cost, type = 'scatter', mode = 'lines', name = 'Median Cost')
+
+# Add layout
+plot <- layout(plot, title = "Monthly Trends in Housing Costs",
+               xaxis = list(title = "Month"),
+               yaxis = list(title = "Cost"))
+
+plot
+
+```
+
+
+
+
+# Heatmap
+```{r}
+# Aggregate by Year and Month
+agg_data <- data %>%
+  mutate(Year = year(`Date Recorded`), Month = month(`Date Recorded`)) %>%
+  group_by(Year, Month) %>%
+  summarise(Mean_Cost = mean(Cost, na.rm = TRUE))
+
+```
+
+
+
+
+```{r}
+# Create the heatmap
+plot_ly(data = agg_data, x = ~Month, y = ~Year, z = ~Mean_Cost, type = "heatmap") %>%
+  layout(title = "Aggregated Heatmap of Mean Costs by Month and Year",
+         xaxis = list(title = "Month"),
+         yaxis = list(title = "Year"))
+
+```
+
+
+```{r}
+# Aggregate by Date
+daily_agg_data <- data %>%
+  group_by(`Date Recorded`) %>%
+  summarise(Mean_Cost = mean(Cost, na.rm = TRUE),
+            median_Cost = median(Cost, na.rm = TRUE))
+
+```
+
+
+```{r}
+# Convert Date to numerical (for plotting)
+daily_agg_data$Date_Num <- as.numeric(daily_agg_data$`Date Recorded`)
+
+# Create the heatmap
+plot_ly(data = daily_agg_data, x = ~Date_Num, y = ~Mean_Cost, type = "heatmap") %>%
+  layout(title = "Aggregated Heatmap of Mean Costs by Day",
+         xaxis = list(title = "Day (as numerical value)"),
+         yaxis = list(title = "Mean Cost"))
+
+```
+
+
+```{r}
+# Create the line plot
+plot_ly(data = daily_agg_data, x = ~`Date Recorded`, y = ~Mean_Cost, type = 'scatter', mode = 'lines') %>%
+  layout(title = "Daily Trends in Mean Housing Costs",
+         xaxis = list(title = "Date"),
+         yaxis = list(title = "Mean Cost"))
+
+```
+
+
 
