@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paycheck &amp; Finance</title>
+<meta name="description" content="Work out take-home pay from an annual salary, bonus and pre-tax deductions, for any US state.">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💵</text></svg>">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="app-header-inner">
+    <div class="brand">
+      <h1>Paycheck &amp; Finance</h1>
+      <span class="year">Tax year <span id="tax-year">2026</span></span>
+    </div>
+    <button type="button" class="theme-toggle" id="theme-toggle">Dark mode</button>
+
+    <div class="tabs" role="tablist" aria-label="Sections">
+      <button class="tab" role="tab" data-tab="salary" aria-selected="true" id="tab-salary">Salary</button>
+      <button class="tab" role="tab" data-tab="budget" aria-selected="false">Budget <span class="soon">soon</span></button>
+      <button class="tab" role="tab" data-tab="savings" aria-selected="false">Savings <span class="soon">soon</span></button>
+      <button class="tab" role="tab" data-tab="debt" aria-selected="false">Debt <span class="soon">soon</span></button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- ======================================================= SALARY TAB -->
+  <section class="tab-panel" data-panel="salary" role="tabpanel" aria-labelledby="tab-salary">
+    <div class="layout">
+
+      <!-- ------------------------------------------------------ inputs -->
+      <div class="panel-inputs">
+        <div class="card">
+          <div class="card-head">
+            <h2>Your pay</h2>
+            <p>Everything updates as you type.</p>
+          </div>
+
+          <div class="field">
+            <label for="salary">Annual salary</label>
+            <div class="input-money">
+              <input type="text" id="salary" inputmode="decimal" autocomplete="off" placeholder="95,000">
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="bonus">Bonus / commission <span class="hint">per year</span></label>
+            <div class="input-money">
+              <input type="text" id="bonus" inputmode="decimal" autocomplete="off" placeholder="0">
+            </div>
+          </div>
+
+          <fieldset>
+            <legend>Pre-tax deductions</legend>
+            <div class="field">
+              <label for="retirement">401(k) / 403(b) <span class="hint">per year</span></label>
+              <div class="input-money">
+                <input type="text" id="retirement" inputmode="decimal" autocomplete="off" placeholder="0">
+              </div>
+            </div>
+            <div class="field">
+              <label for="section125">Health / HSA / FSA <span class="hint">per year</span></label>
+              <div class="input-money">
+                <input type="text" id="section125" inputmode="decimal" autocomplete="off" placeholder="0">
+              </div>
+            </div>
+            <p style="font-size:12px;color:var(--text-muted);margin:2px 0 12px">
+              These are split because they behave differently: retirement money still
+              pays Social Security and Medicare, health premiums do not.
+            </p>
+          </fieldset>
+
+          <div class="field">
+            <label for="state">State</label>
+            <select id="state"></select>
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="status">Filing status</label>
+              <select id="status"></select>
+            </div>
+            <div class="field">
+              <label for="frequency">Paid</label>
+              <select id="frequency"></select>
+            </div>
+          </div>
+
+          <button type="button" class="reset-btn" id="reset">Reset to defaults</button>
+        </div>
+      </div>
+
+      <!-- ----------------------------------------------------- results -->
+      <div>
+        <div class="stats">
+          <div class="stat">
+            <div class="k">Take-home per paycheck</div>
+            <div class="v is-hero" id="stat-takehome">—</div>
+            <div class="sub" id="stat-takehome-sub"></div>
+          </div>
+          <div class="stat">
+            <div class="k">Gross per paycheck</div>
+            <div class="v" id="stat-gross-period">—</div>
+            <div class="sub" id="stat-gross-period-sub"></div>
+          </div>
+          <div class="stat">
+            <div class="k">Take-home per year</div>
+            <div class="v" id="stat-annual">—</div>
+            <div class="sub" id="stat-annual-sub"></div>
+          </div>
+          <div class="stat">
+            <div class="k">Effective tax rate</div>
+            <div class="v" id="stat-effective">—</div>
+            <div class="sub" id="stat-effective-sub"></div>
+          </div>
+          <div class="stat">
+            <div class="k">Marginal rate</div>
+            <div class="v" id="stat-marginal">—</div>
+            <div class="sub" id="stat-marginal-sub"></div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:20px">
+          <div class="card-head">
+            <h2>Where your gross pay goes</h2>
+            <p>Each bar is a slice of the same total. Hover any bar for its share.</p>
+          </div>
+          <div class="chart-scroll">
+            <svg id="chart-breakdown"></svg>
+          </div>
+          <div id="deferral-note" class="note is-warn" hidden></div>
+          <div id="state-note" class="note" hidden></div>
+
+          <details class="table-toggle">
+            <summary>Show the full breakdown as a table</summary>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Line</th>
+                    <th>Per year</th>
+                    <th id="tbl-breakdown-head">Per period</th>
+                    <th>Notes</th>
+                  </tr>
+                </thead>
+                <tbody id="tbl-breakdown"></tbody>
+              </table>
+            </div>
+          </details>
+        </div>
+
+        <div class="chart-grid is-split" style="margin-top:20px">
+
+          <div class="card">
+            <div class="card-head">
+              <h2>How your federal tax is built</h2>
+              <p>Tax generated inside each bracket. Only the top slice of your income pays the top rate.</p>
+            </div>
+            <div class="chart-scroll">
+              <svg id="chart-brackets"></svg>
+            </div>
+            <p class="sub" id="bracket-caption" style="font-size:12.5px;color:var(--text-muted);margin-top:10px"></p>
+
+            <details class="table-toggle">
+              <summary>Show bracket table</summary>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr><th>Rate</th><th>Band</th><th>Income here</th><th>Tax</th></tr>
+                  </thead>
+                  <tbody id="tbl-brackets"></tbody>
+                </table>
+              </div>
+            </details>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <h2>Effective vs marginal rate</h2>
+              <p>What every dollar averages out to, against what the next dollar costs.</p>
+            </div>
+            <div class="chart-scroll">
+              <svg id="chart-rates"></svg>
+            </div>
+            <div class="legend">
+              <span><i style="background:var(--series-1)"></i> Effective rate — total tax ÷ gross pay</span>
+              <span><i style="background:var(--series-2)"></i> Marginal rate — tax on the next $1,000</span>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="card" style="margin-top:20px">
+          <div class="card-head">
+            <h2>Take-home at every pay cadence</h2>
+            <p>Same annual pay, sliced differently. Your selected cadence is highlighted.</p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Cadence</th><th>Gross</th><th>Take-home</th><th>Notes</th></tr>
+              </thead>
+              <tbody id="tbl-frequency"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <p class="disclaimer">
+          Federal brackets, the standard deduction and the Social Security wage base are
+          tax-year 2026 figures (IRS Rev. Proc. 2025-32; SSA). State rates reflect the law
+          in effect 1 January 2026. This models the ordinary salaried case and ignores
+          credits, itemised deductions, city and county income taxes, multi-state work and
+          anything specific to your situation — so treat it as a planning estimate, not
+          tax advice, and not a prediction of your actual withholding.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================================================== PLACEHOLDER TABS -->
+  <section class="tab-panel" data-panel="budget" role="tabpanel" hidden>
+    <div class="card placeholder">
+      <h2>Budget</h2>
+      <p>Not built yet. The plan is to take the take-home number from the Salary tab and
+         split it across fixed costs, variable spending and savings.</p>
+    </div>
+  </section>
+
+  <section class="tab-panel" data-panel="savings" role="tabpanel" hidden>
+    <div class="card placeholder">
+      <h2>Savings</h2>
+      <p>Not built yet. The plan is compounding projections for retirement and
+         brokerage contributions, driven off the same salary inputs.</p>
+    </div>
+  </section>
+
+  <section class="tab-panel" data-panel="debt" role="tabpanel" hidden>
+    <div class="card placeholder">
+      <h2>Debt</h2>
+      <p>Not built yet. The plan is avalanche vs snowball payoff schedules.</p>
+    </div>
+  </section>
+
+</main>
+
+<script src="js/tax-data.js"></script>
+<script src="js/calc.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

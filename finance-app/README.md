@@ -1,0 +1,138 @@
+# Paycheck & Finance
+
+A browser app for working out what an annual salary actually pays you. Enter a
+salary, a bonus, your pre-tax deductions and a state, and it breaks the year
+down into take-home pay, federal tax, state tax and FICA — weekly, bi-weekly,
+semi-monthly, monthly or annually.
+
+Tab one (Salary) is built. Budget, Savings and Debt are stubs.
+
+## Running it
+
+No build step, no dependencies, no network calls. Open the file:
+
+```
+open finance-app/index.html
+```
+
+Or serve it if you prefer a real origin:
+
+```
+cd finance-app && python3 -m http.server 8000
+```
+
+## Tests
+
+The calculation engine is a pure module with no DOM, so it runs under plain Node:
+
+```
+cd finance-app && node test/calc.test.js
+```
+
+63 assertions, all with expected values worked out by hand from the published
+2026 tables rather than read back out of the implementation.
+
+## What it models
+
+| Input | Effect |
+|---|---|
+| Annual salary | Ordinary wage income |
+| Bonus / commission | Added to gross and taxed as ordinary income for the year |
+| 401(k) / 403(b) | Cuts income tax, **not** FICA |
+| Health / HSA / FSA | Cuts income tax **and** FICA (Section 125) |
+| State | Brackets, flat rate or no tax, plus state disability/paid-leave withholding |
+| Filing status | Single, married filing jointly, head of household |
+
+The two pre-tax boxes are separate on purpose. Retirement deferrals still pay
+Social Security and Medicare; Section 125 health premiums do not. Lumping them
+together would overstate take-home for anyone with a 401(k) by about 7.65% of
+their contribution.
+
+### Rules the engine gets right that a flat "salary × rate" calculator misses
+
+- **Marginal brackets.** Only the top slice of income pays the top rate.
+- **Social Security wage base.** 6.2% stops at $184,500, so the marginal rate
+  visibly drops there — you can see the cliff on the rate chart.
+- **Additional Medicare.** 0.9% over $200,000 ($250,000 filing jointly).
+- **Connecticut**, in full: the personal exemption phase-out, the low-bracket
+  add-back and the high-income benefit recapture.
+- **Pennsylvania** taxes 401(k) deferrals — the one state that does — so
+  retirement contributions don't reduce PA tax.
+- **Deferral ceiling.** You can't defer past what FICA claims first, so a very
+  large 401(k) figure is capped rather than driving take-home negative.
+- **Measured marginal rate.** The "next dollar" rate is found by re-running the
+  whole model $5,000 higher and diffing, not by reading a bracket table — that's
+  the only way to catch wage-base cliffs and recapture. The probe is $5,000 wide
+  because several rules are step functions charged per $5,000; a narrower probe
+  lands either side of a step and reports a rate that swings between neighbouring
+  salaries.
+
+## Data sources
+
+Tax year **2026**.
+
+- Federal brackets and the standard deduction: IRS Rev. Proc. 2025-32 (Oct 2025).
+  Single, married-filing-jointly and head-of-household tables were each
+  cross-checked against a published source.
+- Social Security wage base $184,500 and the FICA rates: SSA / IRS Pub. 926.
+- State rates: law in effect 1 January 2026, including the 2026 changes —
+  Indiana 3.00 → 2.95%, Kentucky 4.00 → 3.50%, North Carolina 4.25 → 3.99%,
+  Mississippi 4.40 → 4.00%, Georgia 5.19 → 4.99%, Ohio to a single 2.75% rate
+  above $26,050, and New York's 0.1pt cut to the bottom five brackets.
+
+Each state carries a `confidence` field in `js/tax-data.js`:
+
+- `verified` — cross-checked against a published 2026 source while building.
+- `indexed` — the rates and structure are right, but the bracket thresholds are
+  inflation-projected for 2026 rather than copied from a published table, so
+  cut-offs may be off by a little. The app says so in the state note when you
+  pick one of these.
+
+## Known limits
+
+Deliberately out of scope, and called out in the app's footer:
+
+- Tax credits (child tax credit, EITC, state low-income credits) and itemised
+  deductions — standard deduction only.
+- **City and county income taxes.** These are material in some places: NYC adds
+  ~3–3.9%, every Maryland county adds 2.25–3.2%, and Ohio, Kentucky, Indiana,
+  Michigan, Missouri and Pennsylvania all have local wage taxes. The state note
+  flags this where it applies.
+- Multi-state work, part-year residency, and non-wage income.
+- Supplemental withholding. A bonus is usually withheld at a flat 22% on the day
+  and trued up at filing; this shows the trued-up annual position, not the stub.
+- Actual W-4 withholding, which depends on how you filled the form in.
+
+Treat it as a planning estimate, not tax advice.
+
+## Layout
+
+```
+finance-app/
+├── index.html          markup and tab shell
+├── styles.css          design tokens, light/dark, layout
+├── js/
+│   ├── tax-data.js     2026 federal + 50 states + DC parameters
+│   ├── calc.js         the engine — pure, no DOM, testable
+│   ├── charts.js       hand-rolled SVG charts, no chart library
+│   └── app.js          input wiring and rendering
+└── test/calc.test.js   node test suite
+```
+
+`tax-data.js` and `calc.js` export via UMD so the browser and the test suite run
+the same code — the numbers on screen are the numbers under test.
+
+## Charts
+
+Three, all inline SVG with hover tooltips, keyboard focus and a table-view twin:
+
+1. **Where your gross pay goes** — one bar per component, single hue.
+2. **How your federal tax is built** — tax generated inside each bracket, with
+   your marginal bracket emphasised.
+3. **Effective vs marginal rate** — both series on one axis (both are
+   percentages), with a marker at your salary.
+
+Colors come from a palette validated for colour-blind separation and contrast in
+both light and dark mode. An earlier draft used a stacked bar for chart 1; it was
+dropped because in a no-income-tax state the state segment vanishes and put two
+hues side by side that fail the separation floor.
