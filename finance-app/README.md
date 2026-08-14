@@ -136,3 +136,19 @@ Colors come from a palette validated for colour-blind separation and contrast in
 both light and dark mode. An earlier draft used a stacked bar for chart 1; it was
 dropped because in a no-income-tax state the state segment vanishes and put two
 hues side by side that fail the separation floor.
+
+## Single-file build
+
+To get a version you can open by double-clicking (no server, no separate
+CSS/JS files), bundle everything into one HTML file:
+
+```
+cd finance-app && node build-single-file.js
+```
+
+That writes `dist/paycheck-calculator.html` — around 90 KB, fully self-contained,
+works offline. `--fragment` writes a version without the document wrapper for
+hosts that supply their own.
+
+The bundle is generated from the real source files, so it can never drift from
+what the tests run against.
