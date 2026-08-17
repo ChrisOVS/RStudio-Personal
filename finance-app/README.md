@@ -5,7 +5,8 @@ salary, a bonus, your pre-tax deductions and a state, and it breaks the year
 down into take-home pay, federal tax, state tax and FICA — weekly, bi-weekly,
 semi-monthly, monthly or annually.
 
-Tab one (Salary) is built. Budget, Savings and Debt are stubs.
+Two tabs are built: **Salary** and **Cash flow**. Expenses, Life events and
+Savings are stubs that plug into the cash flow ledger when they land.
 
 ## Running it
 
@@ -26,11 +27,12 @@ cd finance-app && python3 -m http.server 8000
 The calculation engine is a pure module with no DOM, so it runs under plain Node:
 
 ```
-cd finance-app && node test/calc.test.js
+cd finance-app && npm test
 ```
 
-63 assertions, all with expected values worked out by hand from the published
-2026 tables rather than read back out of the implementation.
+142 assertions across two suites — 63 for the tax engine, 79 for the cash flow
+ledger. Expected values are worked out by hand from the published 2026 tables
+rather than read back out of the implementation.
 
 ## What it models
 
@@ -113,24 +115,94 @@ finance-app/
 ├── styles.css          design tokens, light/dark, layout
 ├── js/
 │   ├── tax-data.js     2026 federal + 50 states + DC parameters
-│   ├── calc.js         the engine — pure, no DOM, testable
+│   ├── calc.js         the tax engine — pure, no DOM, testable
+│   ├── cashflow.js     the shared ledger — pure, no DOM, testable
 │   ├── charts.js       hand-rolled SVG charts, no chart library
-│   └── app.js          input wiring and rendering
-└── test/calc.test.js   node test suite
+│   ├── cashflow-ui.js  the cash flow tab: table, editor, charts
+│   └── app.js          salary tab wiring and rendering
+└── test/
+    ├── calc.test.js
+    └── cashflow.test.js
 ```
 
 `tax-data.js` and `calc.js` export via UMD so the browser and the test suite run
 the same code — the numbers on screen are the numbers under test.
 
+## The cash flow ledger
+
+`js/cashflow.js` is the shared spine the other tabs hang off. It holds a list of
+**transactions** projected across a horizon of years: rows are transactions,
+columns are years.
+
+Two rules carry most of the weight.
+
+### Carry-forward
+
+A transaction's `amounts` map is **sparse**, keyed by year. A year with no entry
+inherits the most recent earlier year that has one:
+
+```js
+{ label: 'Rent', cadence: 'monthly', amounts: { 2026: 2400, 2031: 2900 } }
+// 2026-2030 -> 2,400/mo     2031 onward -> 2,900/mo
+```
+
+So you only type the years that change. In the table, a figure you set reads in
+full-strength ink and an inherited one is muted, so the rule is visible rather
+than something you have to remember. Clearing a cell reverts it to inheriting;
+clearing the last remaining entry is refused, so a row can't be silently zeroed.
+
+An optional per-transaction `growth` fills the gaps with a yearly increase, and
+**re-anchors** on every explicit entry — a value you typed always means exactly
+what it says.
+
+### Derived vs manual rows
+
+Other tabs don't write rows directly. They register a provider:
+
+```js
+CashFlowTab.registerSource('salary', function () {
+  return [{ label: 'Take-home pay', group: 'Income', kind: 'income',
+            cadence: 'annual', startYear: 2026, amounts: { 2026: 94000 } }];
+});
+```
+
+On every refresh each provider is re-run and its rows **replace** the previous
+batch from that source, so changing your salary can never leave a stale income
+row behind. Derived rows are locked in the table — editing them by hand would be
+silently overwritten on the next refresh. Only manual rows are hand-editable and
+persisted to localStorage.
+
+The Salary tab is wired in today: take-home becomes an income row, and 401(k)
+and health premiums become their own outflow rows, since money going into a
+401(k) really does leave your paycheck even though it stays yours.
+
+### What it projects
+
+Per year: income, expenses, net, and two running balances — `cumulativeNet`
+(saved, no growth) and `balance` (compounded at `annualReturn`). It also reports
+`shortfallYear`, the first year the balance goes negative.
+
+Growth credits the opening balance plus **half** the year's net flow, since
+contributions arrive spread across the year. Compounding the full contribution
+would overstate returns by roughly half a year, every year.
+
+Amounts are stored at the transaction's own cadence — a monthly row holds a
+per-month figure — so entry stays natural and nothing goes stale if the cadence
+changes.
+
 ## Charts
 
-Three, all inline SVG with hover tooltips, keyboard focus and a table-view twin:
+Five, all inline SVG with hover tooltips and keyboard focus:
 
 1. **Where your gross pay goes** — one bar per component, single hue.
 2. **How your federal tax is built** — tax generated inside each bracket, with
    your marginal bracket emphasised.
 3. **Effective vs marginal rate** — both series on one axis (both are
    percentages), with a marker at your salary.
+4. **Net cash flow by year** — diverging bars, surplus against shortfall, off a
+   zero baseline.
+5. **Projected balance** — balance with growth against contributions alone, both
+   in dollars on one axis, so the gap between them is exactly the compounding.
 
 Colors come from a palette validated for colour-blind separation and contrast in
 both light and dark mode. An earlier draft used a stacked bar for chart 1; it was

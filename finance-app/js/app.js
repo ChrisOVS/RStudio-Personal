@@ -119,6 +119,62 @@
     renderRateChart(input, r);
     renderTables(r, per, freq);
     renderStateNote(r);
+
+    // Keep the last result where the cash flow source provider can read it, then
+    // ask the ledger to rebuild so the income row tracks this salary.
+    latestResult = r;
+    if (window.CashFlowTab) window.CashFlowTab.refresh();
+  }
+
+  var latestResult = null;
+
+  /**
+   * What this tab contributes to the cash flow ledger: take-home pay as an
+   * income row, and the pre-tax deductions as their own rows, since money going
+   * into a 401(k) is a real outflow from your paycheck even though it is still
+   * yours. Rebuilt from scratch on every salary change.
+   */
+  function cashFlowRows() {
+    if (!latestResult || latestResult.gross <= 0) return [];
+    var year = window.CashFlowTab
+      ? window.CashFlowTab.getState().startYear
+      : new Date().getFullYear();
+
+    var rows = [{
+      id: 'salary_takehome',
+      label: 'Take-home pay',
+      group: 'Income',
+      kind: 'income',
+      cadence: 'annual',
+      startYear: year,
+      amounts: (function () { var a = {}; a[year] = latestResult.takeHome; return a; })()
+    }];
+
+    if (latestResult.retirement > 0) {
+      rows.push({
+        id: 'salary_retirement',
+        label: 'Retirement contributions',
+        group: 'Savings',
+        kind: 'expense',
+        cadence: 'annual',
+        startYear: year,
+        amounts: (function () { var a = {}; a[year] = latestResult.retirement; return a; })()
+      });
+    }
+
+    if (latestResult.section125 > 0) {
+      rows.push({
+        id: 'salary_benefits',
+        label: 'Health / HSA / FSA premiums',
+        group: 'Benefits',
+        kind: 'expense',
+        cadence: 'annual',
+        startYear: year,
+        amounts: (function () { var a = {}; a[year] = latestResult.section125; return a; })()
+      });
+    }
+
+    return rows;
   }
 
   function renderStats(r, per, freq) {
@@ -371,6 +427,10 @@
     });
 
     $('tax-year').textContent = TaxData.TAX_YEAR;
+
+    // Register before the first render, so the ledger picks up salary immediately.
+    if (window.CashFlowTab) window.CashFlowTab.registerSource('salary', cashFlowRows);
+
     render();
   }
 

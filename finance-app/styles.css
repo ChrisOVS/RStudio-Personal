@@ -441,3 +441,124 @@ details.table-toggle[open] summary { margin-bottom: 8px; }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* ------------------------------------------------------------- cash flow -- */
+
+/* Diverging pair for surplus/shortfall: warm vs cool, so the sign reads as
+   opposite. Zero is the neutral midpoint (the axis line itself). */
+:root {
+  --surplus: #2a78d6;
+  --deficit: #e34948;
+  --cf-explicit: var(--text-primary);
+  --cf-inherited: var(--text-muted);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --surplus: #3987e5; --deficit: #e66767; }
+}
+:root[data-theme="dark"] { --surplus: #3987e5; --deficit: #e66767; }
+
+.viz-bar.is-surplus { fill: var(--surplus); }
+.viz-bar.is-deficit { fill: var(--deficit); }
+
+.cf-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0 16px;
+}
+.cf-controls .field { margin-bottom: 0; }
+
+.stat .v.is-critical { color: var(--deficit); }
+
+/* The table can be 60 columns wide, so it scrolls inside its own container and
+   the label column stays pinned. */
+.cf-table-wrap { max-height: 62vh; overflow: auto; border: 1px solid var(--border); border-radius: 10px; }
+.cf-table { border-collapse: separate; border-spacing: 0; font-size: 13px; }
+.cf-table th, .cf-table td { white-space: nowrap; border-bottom: 1px solid var(--grid); padding: 7px 10px; }
+
+.cf-table thead th {
+  position: sticky; top: 0; z-index: 3;
+  background: var(--surface-sunken);
+  border-bottom: 1px solid var(--axis);
+}
+.cf-sticky {
+  position: sticky; left: 0; z-index: 2;
+  background: var(--surface);
+  text-align: left;
+  min-width: 190px;
+  box-shadow: 1px 0 0 var(--grid);
+}
+.cf-table thead .cf-sticky { z-index: 4; background: var(--surface-sunken); }
+
+.cf-group td { background: var(--surface-sunken); font-weight: 600; color: var(--text-primary); }
+.cf-group .cf-sticky { background: var(--surface-sunken); }
+
+.cf-name { display: table-cell; }
+.cf-label { margin-right: 6px; }
+.cf-badge {
+  font-size: 10.5px; font-weight: 500; color: var(--text-secondary);
+  border: 1px solid var(--border); border-radius: 999px; padding: 1px 7px;
+  background: var(--surface-sunken); vertical-align: middle;
+}
+.cf-cadence { color: var(--text-muted); font-size: 12px; }
+
+.cf-cell { padding: 0; text-align: right; }
+.cf-cell input {
+  width: 100%; min-width: 84px; border: 0; background: transparent;
+  padding: 7px 10px; text-align: right; font: inherit; font-size: 13px;
+  font-variant-numeric: tabular-nums; border-radius: 0;
+}
+.cf-cell.is-explicit input { color: var(--cf-explicit); font-weight: 600; }
+.cf-cell.is-inherited input { color: var(--cf-inherited); }
+.cf-cell input:hover { background: var(--surface-sunken); }
+.cf-cell input:focus { background: var(--surface-sunken); outline: 2px solid var(--series-1); outline-offset: -2px; }
+.cf-cell.is-locked { color: var(--text-secondary); text-align: right; font-variant-numeric: tabular-nums; background: var(--surface-sunken); }
+.cf-cell.is-inactive { color: var(--text-muted); text-align: right; }
+
+.cf-total td { font-weight: 600; background: var(--surface); }
+.cf-total .cf-sticky { background: var(--surface); }
+.cf-total td { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+.cf-total.is-total td { color: var(--text-primary); border-top: 1px solid var(--axis); }
+.cf-total.is-balance td { color: var(--text-primary); background: var(--surface-sunken); }
+.cf-total.is-balance .cf-sticky { background: var(--surface-sunken); }
+.cf-total td.is-negative { color: var(--deficit); }
+.cf-table tfoot td { position: sticky; bottom: 0; z-index: 1; }
+.cf-table tfoot .cf-sticky { z-index: 3; }
+
+.cf-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 12px; font-size: 12.5px; color: var(--text-secondary); }
+.cf-legend span { display: inline-flex; align-items: center; gap: 7px; }
+.cf-swatch { width: 22px; height: 11px; border-radius: 3px; display: inline-block; border: 1px solid var(--border); }
+.cf-swatch.is-explicit { background: var(--text-primary); }
+.cf-swatch.is-inherited { background: var(--text-muted); }
+.cf-swatch.is-locked { background: var(--surface-sunken); }
+
+.cf-manage-head, .cf-manage-row {
+  display: grid;
+  grid-template-columns: 1.6fr 1.2fr 1fr 1fr .7fr .7fr .7fr auto;
+  gap: 8px; align-items: center;
+}
+.cf-manage-head {
+  font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--text-muted); font-weight: 600; padding: 0 0 8px;
+  border-bottom: 1px solid var(--grid);
+}
+.cf-manage-row { padding: 8px 0; border-bottom: 1px solid var(--grid); }
+.cf-manage-row input, .cf-manage-row select { padding: 6px 8px; font-size: 13px; }
+.cf-del {
+  border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary);
+  border-radius: 7px; padding: 6px 10px; font: inherit; font-size: 12.5px; cursor: pointer;
+}
+.cf-del:hover { color: var(--deficit); border-color: var(--deficit); }
+
+.cf-add-row { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+.cf-add-row input { flex: 1 1 200px; }
+.cf-add-btn {
+  border: 1px solid var(--series-1); background: var(--series-1); color: #fff;
+  border-radius: 8px; padding: 9px 16px; font: inherit; font-size: 13px; cursor: pointer; font-weight: 500;
+}
+.cf-add-btn:hover { filter: brightness(1.06); }
+.cf-empty { color: var(--text-muted); font-size: 13px; padding: 14px 0; }
+
+@media (max-width: 860px) {
+  .cf-manage-head { display: none; }
+  .cf-manage-row { grid-template-columns: 1fr 1fr; }
+}

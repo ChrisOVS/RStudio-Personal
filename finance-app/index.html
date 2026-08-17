@@ -20,9 +20,10 @@
 
     <div class="tabs" role="tablist" aria-label="Sections">
       <button class="tab" role="tab" data-tab="salary" aria-selected="true" id="tab-salary">Salary</button>
-      <button class="tab" role="tab" data-tab="budget" aria-selected="false">Budget <span class="soon">soon</span></button>
+      <button class="tab" role="tab" data-tab="cashflow" aria-selected="false" id="tab-cashflow">Cash flow</button>
+      <button class="tab" role="tab" data-tab="expenses" aria-selected="false">Expenses <span class="soon">soon</span></button>
+      <button class="tab" role="tab" data-tab="lifeevents" aria-selected="false">Life events <span class="soon">soon</span></button>
       <button class="tab" role="tab" data-tab="savings" aria-selected="false">Savings <span class="soon">soon</span></button>
-      <button class="tab" role="tab" data-tab="debt" aria-selected="false">Debt <span class="soon">soon</span></button>
     </div>
   </div>
 </header>
@@ -222,27 +223,144 @@
     </div>
   </section>
 
+  <!-- ==================================================== CASH FLOW TAB -->
+  <section class="tab-panel" data-panel="cashflow" role="tabpanel" aria-labelledby="tab-cashflow" hidden>
+
+    <!-- One filter row above everything it scopes. -->
+    <div class="card cf-controls">
+      <div class="field">
+        <label for="cf-start">Starting year</label>
+        <input type="number" id="cf-start" min="1900" max="2200" step="1">
+      </div>
+      <div class="field">
+        <label for="cf-horizon">Years to project</label>
+        <input type="number" id="cf-horizon" min="1" max="60" step="1">
+      </div>
+      <div class="field">
+        <label for="cf-opening">Starting balance</label>
+        <div class="input-money"><input type="text" id="cf-opening" inputmode="decimal" placeholder="0"></div>
+      </div>
+      <div class="field">
+        <label for="cf-return">Expected return <span class="hint">% a year</span></label>
+        <input type="number" id="cf-return" step="0.5" min="-20" max="30">
+      </div>
+    </div>
+
+    <div class="stats" style="margin-top:20px">
+      <div class="stat">
+        <div class="k">Net this year</div>
+        <div class="v is-hero" id="cf-stat-net">—</div>
+        <div class="sub" id="cf-stat-net-sub"></div>
+      </div>
+      <div class="stat">
+        <div class="k">Projected balance</div>
+        <div class="v" id="cf-stat-balance">—</div>
+        <div class="sub" id="cf-stat-balance-sub"></div>
+      </div>
+      <div class="stat">
+        <div class="k">Of that, growth</div>
+        <div class="v" id="cf-stat-growth">—</div>
+        <div class="sub" id="cf-stat-growth-sub"></div>
+      </div>
+      <div class="stat">
+        <div class="k">Shortfall year</div>
+        <div class="v" id="cf-stat-shortfall">—</div>
+        <div class="sub" id="cf-stat-shortfall-sub"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:20px">
+      <div class="card-head">
+        <h2>Cash flow by transaction</h2>
+        <p>Type an amount in any year to set it. Every later year carries that figure
+           forward until you change it again — so you only fill in the years that differ.
+           Inherited figures are shown in lighter text. Transaction rows hold the amount
+           per period shown in the Cadence column; the group and total rows are annual.</p>
+      </div>
+
+      <div id="cf-source-note" class="note"></div>
+
+      <div class="table-wrap cf-table-wrap">
+        <table class="cf-table">
+          <thead id="cf-thead"></thead>
+          <tbody id="cf-tbody"></tbody>
+          <tfoot id="cf-tfoot"></tfoot>
+        </table>
+      </div>
+
+      <div class="cf-legend">
+        <span><i class="cf-swatch is-explicit"></i> Set by you</span>
+        <span><i class="cf-swatch is-inherited"></i> Carried forward from an earlier year</span>
+        <span><i class="cf-swatch is-locked"></i> Fed from another tab</span>
+      </div>
+    </div>
+
+    <div class="chart-grid" style="margin-top:20px">
+      <div class="card">
+        <div class="card-head">
+          <h2>Net cash flow by year</h2>
+          <p>What is left over, or missing, each year once everything is counted.</p>
+        </div>
+        <div class="chart-scroll"><svg id="chart-netflow"></svg></div>
+        <div class="legend">
+          <span><i style="background:var(--surplus)"></i> Surplus</span>
+          <span><i style="background:var(--deficit)"></i> Shortfall</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Projected balance</h2>
+          <p>Your running balance with investment growth, against what you would have
+             from saving alone. The gap between the lines is the compounding.</p>
+        </div>
+        <div class="chart-scroll"><svg id="chart-balance"></svg></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:20px">
+      <div class="card-head">
+        <h2>Your transactions</h2>
+        <p>Name, group and cadence for the rows you added. Growth applies a yearly
+           increase to the years you have not set by hand.</p>
+      </div>
+
+      <div class="cf-manage-head">
+        <span>Label</span><span>Group</span><span>Direction</span><span>Cadence</span>
+        <span>From</span><span>Until</span><span>Growth %</span><span></span>
+      </div>
+      <div id="cf-manage-list"></div>
+
+      <div class="cf-add-row">
+        <input type="text" id="cf-add-group" placeholder="Group (e.g. Housing)" aria-label="Group for the new transaction">
+        <button type="button" id="cf-add" class="cf-add-btn">Add transaction</button>
+      </div>
+    </div>
+  </section>
+
   <!-- ================================================== PLACEHOLDER TABS -->
-  <section class="tab-panel" data-panel="budget" role="tabpanel" hidden>
+  <section class="tab-panel" data-panel="expenses" role="tabpanel" hidden>
     <div class="card placeholder">
-      <h2>Budget</h2>
-      <p>Not built yet. The plan is to take the take-home number from the Salary tab and
-         split it across fixed costs, variable spending and savings.</p>
+      <h2>Expenses</h2>
+      <p>Not built yet. It will write recurring outflow rows into the cash flow table,
+         the same way the Salary tab writes your take-home in — grouped by category,
+         with per-year amounts that carry forward.</p>
+    </div>
+  </section>
+
+  <section class="tab-panel" data-panel="lifeevents" role="tabpanel" hidden>
+    <div class="card placeholder">
+      <h2>Life events</h2>
+      <p>Not built yet. It will write one-off rows into the cash flow table for things
+         landing in a specific year — a wedding, a car, a house deposit, a sabbatical.</p>
     </div>
   </section>
 
   <section class="tab-panel" data-panel="savings" role="tabpanel" hidden>
     <div class="card placeholder">
-      <h2>Savings</h2>
-      <p>Not built yet. The plan is compounding projections for retirement and
-         brokerage contributions, driven off the same salary inputs.</p>
-    </div>
-  </section>
-
-  <section class="tab-panel" data-panel="debt" role="tabpanel" hidden>
-    <div class="card placeholder">
-      <h2>Debt</h2>
-      <p>Not built yet. The plan is avalanche vs snowball payoff schedules.</p>
+      <h2>Savings &amp; investments</h2>
+      <p>Not built yet. It will read the projected balance already computed on the
+         Cash flow tab and break it out by account, contribution limit and asset mix.</p>
     </div>
   </section>
 
@@ -250,7 +368,9 @@
 
 <script src="js/tax-data.js"></script>
 <script src="js/calc.js"></script>
+<script src="js/cashflow.js"></script>
 <script src="js/charts.js"></script>
+<script src="js/cashflow-ui.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

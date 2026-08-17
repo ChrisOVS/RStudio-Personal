@@ -4,6 +4,7 @@
   "private": true,
   "description": "Salary and take-home pay calculator for US federal and state taxes, tax year 2026.",
   "scripts": {
-    "test": "node test/calc.test.js"
+    "test": "node test/calc.test.js && node test/cashflow.test.js",
+    "build": "node build-single-file.js"
   }
 }

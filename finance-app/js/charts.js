@@ -23,14 +23,18 @@
     return node;
   }
 
+  // The sign goes outside the currency symbol: -$29k, never $-29k.
   function money(n) {
-    return '$' + Math.round(n).toLocaleString('en-US');
+    var v = Math.round(n);
+    return (v < 0 ? '-$' : '$') + Math.abs(v).toLocaleString('en-US');
   }
 
   function moneyShort(n) {
-    if (Math.abs(n) >= 1000000) return '$' + (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
-    if (Math.abs(n) >= 1000) return '$' + Math.round(n / 1000) + 'k';
-    return '$' + Math.round(n);
+    var sign = n < 0 ? '-' : '';
+    var a = Math.abs(n);
+    if (a >= 1000000) return sign + '$' + (a / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+    if (a >= 1000) return sign + '$' + Math.round(a / 1000) + 'k';
+    return sign + '$' + Math.round(a);
   }
 
   function pct(n, digits) {
@@ -293,6 +297,140 @@
     });
   }
 
+  /* ----------------------------------------------- 4. net cash flow by year -- */
+
+  /**
+   * Diverging bars off a zero baseline: surplus years one way, deficit years the
+   * other. Diverging rather than categorical because the sign IS the meaning —
+   * blue and red read as opposite, with the zero line as the neutral midpoint.
+   */
+  function renderNetFlow(svg, years, net) {
+    clear(svg);
+    var W = Math.max(640, years.length * 44);
+    var H = 240;
+    var padL = 62, padR = 16, padT = 16, padB = 40;
+    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+    svg.setAttribute('role', 'img');
+
+    var plotW = W - padL - padR;
+    var plotH = H - padT - padB;
+
+    var maxAbs = Math.max.apply(null, net.map(Math.abs).concat([1]));
+    var step = niceStep(maxAbs);
+    var top = Math.ceil(maxAbs / step) * step || step;
+    var hasNegative = net.some(function (v) { return v < 0; });
+    var bottom = hasNegative ? -top : 0;
+
+    function sy(v) { return padT + plotH - ((v - bottom) / (top - bottom)) * plotH; }
+
+    for (var g = bottom; g <= top + 1e-6; g += step) {
+      var gy = sy(g);
+      svg.appendChild(el('line', {
+        x1: padL, y1: gy, x2: padL + plotW, y2: gy,
+        class: Math.abs(g) < 1e-6 ? 'viz-axis' : 'viz-grid'
+      }));
+      svg.appendChild(el('text', { x: padL - 10, y: gy, 'text-anchor': 'end', 'dominant-baseline': 'middle', class: 'viz-tick' }))
+        .textContent = moneyShort(g);
+    }
+
+    var slotW = plotW / years.length;
+    var barW = Math.min(30, slotW - 8);
+    var zeroY = sy(0);
+
+    years.forEach(function (year, i) {
+      var v = net[i];
+      var cx = padL + slotW * i + slotW / 2;
+      var y = v >= 0 ? sy(v) : zeroY;
+      var h = Math.max(2, Math.abs(sy(v) - zeroY));
+
+      svg.appendChild(el('rect', {
+        x: cx - barW / 2, y: y, width: barW, height: h, rx: 4,
+        class: 'viz-bar ' + (v >= 0 ? 'is-surplus' : 'is-deficit')
+      }));
+
+      // Label every few years only — a number on every bar is unreadable.
+      if (i === 0 || i === years.length - 1 || i % 5 === 0) {
+        svg.appendChild(el('text', { x: cx, y: padT + plotH + 18, 'text-anchor': 'middle', class: 'viz-tick' }))
+          .textContent = year;
+      }
+
+      attachHover(svg, { x: cx - slotW / 2, y: padT, width: slotW, height: plotH },
+        '<strong>' + year + '</strong><br>' +
+        (v >= 0 ? 'Surplus ' : 'Shortfall ') + money(Math.abs(v)) +
+        '<br><span class="viz-tooltip-dim">' + (v >= 0 ? 'money left over' : 'more out than in') + '</span>');
+    });
+  }
+
+  /* ------------------------------------------------- 5. projected balance ---- */
+
+  /**
+   * Balance over time against contributions alone. Both series are dollars on
+   * ONE axis, so the gap between them is exactly the compounding — no dual-axis
+   * sleight of hand.
+   */
+  function renderBalance(svg, years, balance, contributions) {
+    clear(svg);
+    var W = Math.max(640, years.length * 40);
+    var H = 260;
+    var padL = 66, padR = 104, padT = 18, padB = 40;   // padR fits the "With growth" end label
+    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+    svg.setAttribute('role', 'img');
+    if (years.length < 2) return;
+
+    var plotW = W - padL - padR;
+    var plotH = H - padT - padB;
+
+    var all = balance.concat(contributions);
+    var max = Math.max.apply(null, all.concat([1]));
+    var min = Math.min.apply(null, all.concat([0]));
+    var step = niceStep(max - min);
+    var top = Math.ceil(max / step) * step || step;
+    var bottom = min < 0 ? Math.floor(min / step) * step : 0;
+
+    function sx(i) { return padL + (i / (years.length - 1)) * plotW; }
+    function sy(v) { return padT + plotH - ((v - bottom) / (top - bottom)) * plotH; }
+
+    for (var g = bottom; g <= top + 1e-6; g += step) {
+      var gy = sy(g);
+      svg.appendChild(el('line', {
+        x1: padL, y1: gy, x2: padL + plotW, y2: gy,
+        class: Math.abs(g) < 1e-6 && bottom < 0 ? 'viz-axis' : 'viz-grid'
+      }));
+      svg.appendChild(el('text', { x: padL - 10, y: gy, 'text-anchor': 'end', 'dominant-baseline': 'middle', class: 'viz-tick' }))
+        .textContent = moneyShort(g);
+    }
+
+    function path(series, cls) {
+      var d = series.map(function (v, i) {
+        return (i ? 'L' : 'M') + sx(i).toFixed(1) + ' ' + sy(v).toFixed(1);
+      }).join(' ');
+      svg.appendChild(el('path', { d: d, class: cls, fill: 'none' }));
+    }
+
+    path(contributions, 'viz-line is-series-2');
+    path(balance, 'viz-line is-series-1');
+
+    var last = years.length - 1;
+    svg.appendChild(el('text', { x: sx(last) + 8, y: sy(balance[last]), 'dominant-baseline': 'middle', class: 'viz-series-label is-series-1' }))
+      .textContent = 'With growth';
+    svg.appendChild(el('text', { x: sx(last) + 8, y: sy(contributions[last]), 'dominant-baseline': 'middle', class: 'viz-series-label is-series-2' }))
+      .textContent = 'Saved only';
+
+    years.forEach(function (year, i) {
+      if (i === 0 || i === last || i % 5 === 0) {
+        svg.appendChild(el('text', { x: sx(i), y: padT + plotH + 18, 'text-anchor': 'middle', class: 'viz-tick' }))
+          .textContent = year;
+      }
+      attachHover(svg, { x: sx(i) - plotW / (years.length - 1) / 2, y: padT, width: plotW / (years.length - 1), height: plotH },
+        '<strong>' + year + '</strong><br>' +
+        'Balance ' + money(balance[i]) + '<br>' +
+        '<span class="viz-tooltip-dim">Contributions ' + money(contributions[i]) +
+        '<br>Growth ' + money(balance[i] - contributions[i]) + '</span>');
+    });
+
+    svg.appendChild(el('line', { x1: padL, y1: padT + plotH, x2: padL + plotW, y2: padT + plotH, class: 'viz-axis' }));
+  }
+
   function niceStep(max) {
     if (max <= 0) return 1;
     var raw = max / 4;
@@ -306,6 +444,8 @@
     renderBreakdown: renderBreakdown,
     renderBrackets: renderBrackets,
     renderRateCurve: renderRateCurve,
+    renderNetFlow: renderNetFlow,
+    renderBalance: renderBalance,
     money: money,
     moneyShort: moneyShort,
     pct: pct,
