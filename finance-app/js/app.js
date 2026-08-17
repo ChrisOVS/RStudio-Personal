@@ -522,7 +522,9 @@
    */
   function initialTab() {
     try {
-      if (window.Storage && Storage.summary().sections > 0) return 'health';
+      // Snapshotted at load: several tabs write defaults during their own init,
+      // so checking storage now would call everyone a returning visitor.
+      if (window.Storage && Storage.hadSavedData()) return 'health';
     } catch (e) { /* fall through */ }
     return 'salary';
   }

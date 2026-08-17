@@ -102,6 +102,17 @@
     return { sections: k.length, bytes: bytes, available: isAvailable() };
   }
 
+  /**
+   * Whether anything was saved BEFORE this page run started.
+   *
+   * Snapshotted while this module is parsed, which is before any tab's
+   * DOMContentLoaded init can run — several of them write their defaults to
+   * storage on startup, so asking later always answers "yes" and a first-time
+   * visitor would be treated as a returning one.
+   */
+  var hadDataAtLoad = keys().length > 0;
+  function hadSavedData() { return hadDataAtLoad; }
+
   function isAvailable() {
     try {
       var probe = PREFIX + '__probe';
@@ -179,6 +190,7 @@
     apply: apply,
     clear: clear,
     summary: summary,
+    hadSavedData: hadSavedData,
     isAvailable: isAvailable,
     encode: encode,
     decode: decode,

@@ -190,12 +190,41 @@
       }
     } catch (e) { /* ignore */ }
 
+    detectSaveMode().then(labelSaveButton);
     $('hl-download').addEventListener('click', downloadBackup);
     $('hl-copy-link').addEventListener('click', copyLink);
     $('hl-import').addEventListener('change', importFile);
     $('hl-clear').addEventListener('click', clearAll);
 
     render();
+  }
+
+  /**
+   * Can this page actually hand over a file?
+   *
+   * Three worlds. With the host's downloads capability, a real save prompt. As a
+   * plain file on disk, an ordinary blob download works. Embedded in a viewer
+   * without the capability, NEITHER works — a blob or data: link is silently
+   * inert there — so the honest move is to put the text on the page rather than
+   * ship a button that quietly does nothing.
+   */
+  var saveMode = 'text';
+
+  async function detectSaveMode() {
+    try {
+      if (window.claude && window.claude.use && await window.claude.use('downloads')) {
+        saveMode = 'capability';
+        return;
+      }
+    } catch (e) { /* fall through */ }
+    // Top-level document: a normal download works. Framed: assume it does not.
+    saveMode = (window.self === window.top) ? 'blob' : 'text';
+  }
+
+  function labelSaveButton() {
+    $('hl-download').textContent = saveMode === 'text'
+      ? 'Show backup text'
+      : 'Download a backup';
   }
 
   async function downloadBackup() {
@@ -206,38 +235,55 @@
     }
     var json = JSON.stringify(payload, null, 2);
 
-    // The published page can hand the viewer a file only through the host, and
-    // only if they accept. Everywhere else, fall back to an ordinary download.
-    try {
-      var downloads = window.claude && window.claude.use ? await window.claude.use('downloads') : null;
-      if (downloads) {
+    if (saveMode === 'capability') {
+      try {
+        var downloads = await window.claude.use('downloads');
         await downloads.save({ filename: Storage.filename(), data: json });
         flash('Backup saved.');
         return;
-      }
-    } catch (err) {
-      if (err && err.code === 'declined') return;          // they said no; not an error
-      if (err && err.code === 'rate_limited') {
-        flash('A save prompt is already open.', true);
+      } catch (err) {
+        if (err && err.code === 'declined') return;       // they said no; not an error
+        if (err && err.code === 'rate_limited') {
+          flash('A save prompt is already open.', true);
+          return;
+        }
+        showBackupText(json);                              // anything else: show it instead
         return;
       }
-      // Anything else: fall through to the plain download below.
     }
 
-    try {
-      var blob = new Blob([json], { type: 'application/json' });
-      var url = URL.createObjectURL(blob);
-      var a = document.createElement('a');
-      a.href = url;
-      a.download = Storage.filename();
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
-      flash('Backup downloaded.');
-    } catch (e) {
-      flash('Could not save the file here. Try the link instead.', true);
+    if (saveMode === 'blob') {
+      try {
+        var blob = new Blob([json], { type: 'application/json' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = Storage.filename();
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+        flash('Backup downloaded.');
+        return;
+      } catch (e) { /* fall through to text */ }
     }
+
+    showBackupText(json);
+  }
+
+  /** The always-works path: the backup, on the page, ready to copy. */
+  function showBackupText(json) {
+    var box = $('hl-link-box');
+    box.value = json;
+    box.rows = 10;
+    box.hidden = false;
+    box.focus();
+    box.select();
+    navigator.clipboard && navigator.clipboard.writeText(json).then(function () {
+      flash('Backup copied to your clipboard. Paste it into a file named ' + Storage.filename() + '.');
+    }, function () {
+      flash('Copy this text into a file named ' + Storage.filename() + '.');
+    });
   }
 
   async function copyLink() {
@@ -256,6 +302,7 @@
 
     var box = $('hl-link-box');
     box.value = link;
+    box.rows = 3;
     box.hidden = false;
     box.focus();
     box.select();
