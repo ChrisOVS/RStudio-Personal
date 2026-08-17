@@ -441,3 +441,450 @@ details.table-toggle[open] summary { margin-bottom: 8px; }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* ------------------------------------------------------------- cash flow -- */
+
+/* Diverging pair for surplus/shortfall: warm vs cool, so the sign reads as
+   opposite. Zero is the neutral midpoint (the axis line itself). */
+:root {
+  --surplus: #2a78d6;
+  --deficit: #e34948;
+  --cf-explicit: var(--text-primary);
+  --cf-inherited: var(--text-muted);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --surplus: #3987e5; --deficit: #e66767; }
+}
+:root[data-theme="dark"] { --surplus: #3987e5; --deficit: #e66767; }
+
+.viz-bar.is-surplus { fill: var(--surplus); }
+.viz-bar.is-deficit { fill: var(--deficit); }
+
+.cf-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0 16px;
+}
+.cf-controls .field { margin-bottom: 0; }
+
+.stat .v.is-critical { color: var(--deficit); }
+
+/* The table can be 60 columns wide, so it scrolls inside its own container and
+   the label column stays pinned. */
+.cf-table-wrap { max-height: 62vh; overflow: auto; border: 1px solid var(--border); border-radius: 10px; }
+.cf-table { border-collapse: separate; border-spacing: 0; font-size: 13px; }
+.cf-table th, .cf-table td { white-space: nowrap; border-bottom: 1px solid var(--grid); padding: 7px 10px; }
+
+.cf-table thead th {
+  position: sticky; top: 0; z-index: 3;
+  background: var(--surface-sunken);
+  border-bottom: 1px solid var(--axis);
+}
+.cf-sticky {
+  position: sticky; left: 0; z-index: 2;
+  background: var(--surface);
+  text-align: left;
+  min-width: 190px;
+  box-shadow: 1px 0 0 var(--grid);
+}
+.cf-table thead .cf-sticky { z-index: 4; background: var(--surface-sunken); }
+
+.cf-group td { background: var(--surface-sunken); font-weight: 600; color: var(--text-primary); }
+.cf-group .cf-sticky { background: var(--surface-sunken); }
+
+.cf-name { display: table-cell; }
+.cf-label { margin-right: 6px; }
+.cf-badge {
+  font-size: 10.5px; font-weight: 500; color: var(--text-secondary);
+  border: 1px solid var(--border); border-radius: 999px; padding: 1px 7px;
+  background: var(--surface-sunken); vertical-align: middle;
+}
+.cf-cadence { color: var(--text-muted); font-size: 12px; }
+
+.cf-cell { padding: 0; text-align: right; }
+.cf-cell input {
+  width: 100%; min-width: 84px; border: 0; background: transparent;
+  padding: 7px 10px; text-align: right; font: inherit; font-size: 13px;
+  font-variant-numeric: tabular-nums; border-radius: 0;
+}
+.cf-cell.is-explicit input { color: var(--cf-explicit); font-weight: 600; }
+.cf-cell.is-inherited input { color: var(--cf-inherited); }
+.cf-cell input:hover { background: var(--surface-sunken); }
+.cf-cell input:focus { background: var(--surface-sunken); outline: 2px solid var(--series-1); outline-offset: -2px; }
+.cf-cell.is-locked { color: var(--text-secondary); text-align: right; font-variant-numeric: tabular-nums; background: var(--surface-sunken); }
+.cf-cell.is-inactive { color: var(--text-muted); text-align: right; }
+
+.cf-total td { font-weight: 600; background: var(--surface); }
+.cf-total .cf-sticky { background: var(--surface); }
+.cf-total td { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+.cf-total.is-total td { color: var(--text-primary); border-top: 1px solid var(--axis); }
+.cf-total.is-balance td { color: var(--text-primary); background: var(--surface-sunken); }
+.cf-total.is-balance .cf-sticky { background: var(--surface-sunken); }
+.cf-total td.is-negative { color: var(--deficit); }
+.cf-table tfoot td { position: sticky; bottom: 0; z-index: 1; }
+.cf-table tfoot .cf-sticky { z-index: 3; }
+
+.cf-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 12px; font-size: 12.5px; color: var(--text-secondary); }
+.cf-legend span { display: inline-flex; align-items: center; gap: 7px; }
+.cf-swatch { width: 22px; height: 11px; border-radius: 3px; display: inline-block; border: 1px solid var(--border); }
+.cf-swatch.is-explicit { background: var(--text-primary); }
+.cf-swatch.is-inherited { background: var(--text-muted); }
+.cf-swatch.is-locked { background: var(--surface-sunken); }
+
+.cf-manage-head, .cf-manage-row {
+  display: grid;
+  grid-template-columns: 1.6fr 1.2fr 1fr 1fr .7fr .7fr .7fr auto;
+  gap: 8px; align-items: center;
+}
+.cf-manage-head {
+  font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--text-muted); font-weight: 600; padding: 0 0 8px;
+  border-bottom: 1px solid var(--grid);
+}
+.cf-manage-row { padding: 8px 0; border-bottom: 1px solid var(--grid); }
+.cf-manage-row input, .cf-manage-row select { padding: 6px 8px; font-size: 13px; }
+.cf-del {
+  border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary);
+  border-radius: 7px; padding: 6px 10px; font: inherit; font-size: 12.5px; cursor: pointer;
+}
+.cf-del:hover { color: var(--deficit); border-color: var(--deficit); }
+
+.cf-add-row { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+.cf-add-row input { flex: 1 1 200px; }
+.cf-add-btn {
+  border: 1px solid var(--series-1); background: var(--series-1); color: #fff;
+  border-radius: 8px; padding: 9px 16px; font: inherit; font-size: 13px; cursor: pointer; font-weight: 500;
+}
+.cf-add-btn:hover { filter: brightness(1.06); }
+.cf-empty { color: var(--text-muted); font-size: 13px; padding: 14px 0; }
+
+@media (max-width: 860px) {
+  .cf-manage-head { display: none; }
+  .cf-manage-row { grid-template-columns: 1fr 1fr; }
+}
+
+/* ------------------------------------------------- savings & investments -- */
+
+.sv-accounts { display: grid; gap: 12px; margin-top: 4px; }
+
+.sv-account {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  background: var(--surface);
+}
+.sv-account.is-linked { background: var(--surface-sunken); }
+
+.sv-account-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.sv-name { font-weight: 600; font-size: 14px; }
+.sv-name-input { width: auto; flex: 1 1 180px; font-weight: 600; padding: 6px 9px; }
+.sv-account-head .cf-del { margin-left: auto; }
+
+/* Pre-tax vs post-tax is the distinction that stops double-counting, so it is
+   labelled on every account rather than left to colour. */
+.sv-flag {
+  font-size: 11px; border-radius: 999px; padding: 2px 9px;
+  border: 1px solid var(--border); color: var(--text-secondary); white-space: nowrap;
+}
+.sv-flag.is-payroll { background: var(--surface-sunken); }
+.sv-flag.is-posttax { background: var(--surface-sunken); border-color: var(--series-1); color: var(--accent-ink); }
+
+.sv-account-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.sv-account-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--text-secondary); }
+.sv-account-grid input { padding: 7px 9px; font-size: 13.5px; }
+.sv-account-grid input:disabled { background: var(--surface-sunken); color: var(--text-muted); cursor: not-allowed; }
+
+.sv-account-foot {
+  display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  margin-top: 10px; font-size: 12px; color: var(--text-muted);
+}
+.sv-projected { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+
+/* The add-account picker is a control, not a row — keep it from stretching. */
+#sv-add-type { flex: 0 1 240px; width: auto; }
+
+/* -------------------------------------------------------------- expenses -- */
+
+.ex-head, .ex-row {
+  display: grid;
+  grid-template-columns: 1.7fr 1fr 1fr 1fr 1fr .8fr auto;
+  gap: 8px;
+  align-items: center;
+}
+.ex-head {
+  font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--text-muted); font-weight: 600; padding: 4px 0 8px;
+  border-bottom: 1px solid var(--grid);
+}
+.ex-row { padding: 8px 0; border-bottom: 1px solid var(--grid); }
+.ex-row.is-off { opacity: .5; }
+.ex-row input, .ex-row select { padding: 7px 9px; font-size: 13px; }
+.ex-amount { min-width: 0; }
+.ex-annual {
+  font-size: 13px; text-align: right; color: var(--text-primary);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.ex-annual small { color: var(--text-muted); font-size: 11px; margin-left: 1px; }
+
+/* A blank inflation box means "follow the default", so the tag says which is
+   in force rather than leaving an empty field ambiguous. */
+.ex-infl { position: relative; display: flex; flex-direction: column; gap: 2px; }
+.ex-infl input { width: 100%; }
+.ex-infl-tag { font-size: 10px; color: var(--text-muted); letter-spacing: .02em; }
+
+.ex-preset-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.ex-buffer-preset {
+  border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary);
+  border-radius: 7px; padding: 8px 12px; font: inherit; font-size: 13px; cursor: pointer;
+}
+.ex-buffer-preset:hover { border-color: var(--series-1); color: var(--accent-ink); }
+.ex-buffer-out {
+  font-size: 22px; font-weight: 600; color: var(--series-1); line-height: 1.5;
+}
+
+@media (max-width: 900px) {
+  .ex-head { display: none; }
+  .ex-row { grid-template-columns: 1fr 1fr; }
+}
+
+/* A cell typed over on the Cash flow tab, on a row another tab owns. Marked
+   with a rule rather than colour alone so it survives a greyscale print. */
+.cf-cell.is-overridden { box-shadow: inset 0 -2px 0 var(--series-2); }
+.cf-cell.is-overridden input { color: var(--text-primary); font-weight: 600; }
+
+/* The `.ex-row input` padding above resets the money-prefix inset, so restore it
+   at higher specificity — otherwise the "$" sits on top of the first digit. */
+.ex-row .input-money input { padding-left: 25px; }
+
+/* Category picker is a control, not a row. */
+#ex-add-category { flex: 0 1 240px; width: auto; }
+
+/* ----------------------------------------------------------- life events -- */
+
+.le-head, .le-row {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 1fr .7fr 1fr .6fr .9fr 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+.le-head {
+  font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--text-muted); font-weight: 600; padding: 4px 0 8px;
+  border-bottom: 1px solid var(--grid);
+}
+.le-row { padding: 8px 0; border-bottom: 1px solid var(--grid); }
+.le-row input, .le-row select { padding: 7px 9px; font-size: 13px; }
+.le-row.is-outside { opacity: .62; }
+.le-amount { min-width: 0; }
+.le-row .input-money input { padding-left: 25px; }
+
+.le-infl-toggle { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-secondary); cursor: pointer; }
+.le-infl-toggle input { width: auto; padding: 0; }
+
+.le-cost {
+  font-size: 13px; text-align: right; color: var(--text-primary);
+  font-variant-numeric: tabular-nums; display: flex; flex-direction: column; align-items: flex-end;
+}
+.le-cost small { color: var(--text-muted); font-size: 10.5px; }
+
+.le-warn {
+  grid-column: 1 / -1; font-size: 12px; color: var(--text-secondary);
+  border-left: 3px solid var(--warn); padding: 4px 10px; margin-top: 4px;
+  background: var(--surface-sunken); border-radius: 0 6px 6px 0;
+}
+
+#le-add-category { flex: 0 1 240px; width: auto; }
+
+@media (max-width: 980px) {
+  .le-head { display: none; }
+  .le-row { grid-template-columns: 1fr 1fr; }
+}
+
+/* ---------------------------------------------------------- pay schedule -- */
+
+.pay-controls { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.pay-controls .field { margin-bottom: 0; width: 170px; }
+
+.pay-table td, .pay-table th { white-space: nowrap; }
+.pay-table tr.is-base td { background: var(--surface-sunken); font-weight: 600; }
+.pay-derived { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.pay-cell { padding: 0; }
+.pay-cell input {
+  width: 100%; min-width: 96px; border: 0; background: transparent;
+  padding: 8px 10px; text-align: right; font: inherit; font-size: 13.5px;
+  font-variant-numeric: tabular-nums; color: var(--text-muted);
+}
+/* A pinned year is a claim you made; a projected one is the model guessing. */
+.pay-cell.is-pinned input { color: var(--text-primary); font-weight: 600; }
+.pay-cell.is-pinned { box-shadow: inset 0 -2px 0 var(--series-1); }
+.pay-cell input:hover { background: var(--surface-sunken); }
+.pay-cell input:focus { background: var(--surface-sunken); outline: 2px solid var(--series-1); outline-offset: -2px; }
+
+/* The add-back pair on the cash flow table. */
+.cf-total.is-addback td { color: var(--text-secondary); font-weight: 500; }
+.cf-total.is-networth td { color: var(--text-primary); background: var(--surface-sunken); }
+.cf-total.is-networth .cf-sticky { background: var(--surface-sunken); }
+
+/* ===================================================== POLISH & MOBILE ==== */
+
+/* iOS Safari zooms the page whenever a focused control has a font-size under
+   16px. Bumping every control to 16px on touch devices stops that at the
+   source. The alternative — maximum-scale=1 in the viewport tag — also stops it,
+   by disabling pinch zoom entirely, which breaks the page for anyone who needs
+   to magnify it. This costs a little density on phones and nothing on desktop. */
+@media (pointer: coarse) {
+  input[type="text"], input[type="number"], select, textarea,
+  .cf-cell input, .pay-cell input, .ex-row input, .ex-row select,
+  .le-row input, .le-row select, .sv-account-grid input, .cf-manage-row input {
+    font-size: 16px;
+  }
+  .cf-cell input, .pay-cell input { min-width: 110px; }
+  /* Bigger targets where a fingertip has to land. */
+  .cf-del, .ex-buffer-preset, .hl-btn, .cf-add-btn, .theme-toggle { min-height: 40px; }
+  .tab { padding: 12px 14px 14px; }
+}
+
+/* Motion: short, and only where it tells you something changed. */
+:root { --ease: cubic-bezier(.4, 0, .2, 1); }
+
+.card { transition: box-shadow .18s var(--ease), border-color .18s var(--ease); }
+.tab { transition: color .15s var(--ease), border-color .15s var(--ease); }
+input, select, textarea, button { transition: border-color .15s var(--ease), background .15s var(--ease), color .15s var(--ease); }
+.viz-bar { transition: fill .2s var(--ease); }
+.cf-add-btn, .hl-btn, .cf-del, .ex-buffer-preset { transition: all .15s var(--ease); }
+.cf-add-btn:active, .hl-btn:active, .cf-del:active { transform: translateY(1px); }
+
+.tab-panel:not([hidden]) { animation: panel-in .22s var(--ease) both; }
+@keyframes panel-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-panel:not([hidden]) { animation: none; }
+  * { transition: none !important; }
+}
+
+/* Inputs read as editable before you click them. */
+input[type="text"]:hover, input[type="number"]:hover, select:hover { border-color: var(--text-muted); }
+
+/* Scroll containers hint that there is more to the right. */
+.table-wrap, .chart-scroll, .cf-table-wrap { scrollbar-width: thin; -webkit-overflow-scrolling: touch; }
+.wrap { padding-bottom: max(64px, env(safe-area-inset-bottom)); }
+
+/* ========================================================== HEALTH TAB ==== */
+
+.hl-hero {
+  display: flex; align-items: center; gap: 28px; flex-wrap: wrap;
+  margin-top: 24px;
+}
+.hl-dial { position: relative; width: 120px; height: 120px; flex: 0 0 auto; }
+.hl-dial svg { width: 120px; height: 120px; display: block; }
+.hl-ring-track { fill: none; stroke: var(--grid); stroke-width: 9; }
+.hl-ring-fill {
+  fill: none; stroke-width: 9; stroke-linecap: round;
+  transition: stroke-dashoffset .5s var(--ease), stroke .2s var(--ease);
+}
+@media (prefers-reduced-motion: reduce) { .hl-ring-fill { transition: none; } }
+
+.hl-score-value {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 34px; font-weight: 600; letter-spacing: -0.02em;
+}
+.hl-hero-text { flex: 1 1 260px; min-width: 0; }
+.hl-hero-text h2 { font-size: 20px; letter-spacing: -0.02em; }
+.hl-hero-text p { margin: 6px 0 0; color: var(--text-secondary); font-size: 14px; }
+.hl-counted { display: inline-block; margin-top: 10px; font-size: 12px; color: var(--text-muted); }
+
+/* Status colours are reserved for status, and never travel alone — every card
+   pairs the colour with a worded chip. */
+.hl-ring-fill.is-good { stroke: var(--good); }
+.hl-ring-fill.is-ok { stroke: var(--series-1); }
+.hl-ring-fill.is-warn { stroke: var(--warn); }
+.hl-ring-fill.is-bad { stroke: var(--deficit); }
+.hl-ring-fill.is-unknown { stroke: var(--axis); }
+.hl-score-value.is-good { color: var(--good); }
+.hl-score-value.is-ok { color: var(--series-1); }
+.hl-score-value.is-warn { color: var(--text-primary); }
+.hl-score-value.is-bad { color: var(--deficit); }
+.hl-score-value.is-unknown { color: var(--text-muted); }
+
+.hl-metrics {
+  display: grid; gap: 14px; margin-top: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+.hl-metric {
+  background: var(--surface); border: 1px solid var(--border);
+  border-left: 3px solid var(--axis);
+  border-radius: 10px; padding: 16px 18px; box-shadow: var(--shadow);
+}
+.hl-metric.is-good { border-left-color: var(--good); }
+.hl-metric.is-ok   { border-left-color: var(--series-1); }
+.hl-metric.is-warn { border-left-color: var(--warn); }
+.hl-metric.is-bad  { border-left-color: var(--deficit); }
+.hl-metric.is-info, .hl-metric.is-unknown { border-left-color: var(--axis); }
+
+.hl-metric-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.hl-metric-label { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+.hl-chip {
+  font-size: 11px; font-weight: 500; border-radius: 999px; padding: 2px 9px;
+  border: 1px solid var(--border); background: var(--surface-sunken); color: var(--text-secondary);
+  white-space: nowrap;
+}
+.hl-chip.is-good { color: var(--good); border-color: var(--good); }
+.hl-chip.is-warn { color: var(--text-primary); border-color: var(--warn); }
+.hl-chip.is-bad  { color: var(--deficit); border-color: var(--deficit); }
+
+.hl-metric-value { font-size: 30px; font-weight: 600; letter-spacing: -0.02em; margin: 8px 0 4px; }
+.hl-metric-headline { margin: 0; font-size: 13.5px; color: var(--text-primary); }
+.hl-metric-detail { margin: 8px 0 0; font-size: 12.5px; color: var(--text-muted); line-height: 1.55; }
+
+.hl-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+.hl-btn {
+  border: 1px solid var(--axis); background: var(--surface); color: var(--text-primary);
+  border-radius: 9px; padding: 10px 16px; font: inherit; font-size: 13.5px; cursor: pointer;
+}
+.hl-btn:hover { background: var(--surface-sunken); border-color: var(--series-1); }
+.hl-btn.is-danger { color: var(--text-secondary); }
+.hl-btn.is-danger:hover { color: var(--deficit); border-color: var(--deficit); }
+.hl-file { display: inline-flex; align-items: center; }
+
+.hl-link-box {
+  width: 100%; margin-top: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px; resize: vertical; word-break: break-all;
+}
+
+.hl-flash {
+  margin-top: 12px; font-size: 13px; color: var(--good);
+  opacity: 0; transform: translateY(-3px);
+  transition: opacity .2s var(--ease), transform .2s var(--ease);
+  min-height: 1.2em;
+}
+.hl-flash.is-visible { opacity: 1; transform: none; }
+.hl-flash.is-error { color: var(--deficit); }
+
+.note.is-good { border-left-color: var(--good); }
+.hl-explain p { font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin: 0 0 10px; }
+.hl-explain p:last-child { margin-bottom: 0; }
+
+@media (max-width: 620px) {
+  .hl-hero { gap: 18px; }
+  .hl-actions .hl-btn, .hl-actions .cf-add-btn { flex: 1 1 auto; text-align: center; }
+}
+
+.hl-caution {
+  font-size: 12.5px; color: var(--text-secondary); line-height: 1.6;
+  margin: 14px 0 0; padding: 10px 13px;
+  background: var(--surface-sunken); border: 1px solid var(--border);
+  border-left: 3px solid var(--warn); border-radius: 0 8px 8px 0;
+}
+.hl-caution code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: var(--surface); padding: 1px 5px; border-radius: 4px; font-size: 11.5px;
+}
+
+.hl-path {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px; background: var(--surface); padding: 2px 6px;
+  border-radius: 4px; border: 1px solid var(--border); word-break: break-all;
+}

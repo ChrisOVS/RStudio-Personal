@@ -1,0 +1,87 @@
+name: Deploy finance app to Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'finance-app/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time. Queued rather than cancelled, so a run already
+# publishing is never killed half way.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # The engines are pure modules with no dependencies, so this is the real
+      # test suite, not a smoke check. A red build must not reach the site.
+      - name: Run tests
+        working-directory: finance-app
+        run: npm test
+
+      - name: Build the standalone file
+        working-directory: finance-app
+        run: node build-single-file.js
+
+      - name: Assemble the site
+        run: |
+          mkdir -p _site
+          cp -r finance-app/index.html \
+                finance-app/styles.css \
+                finance-app/js \
+                finance-app/icons \
+                finance-app/manifest.webmanifest \
+                finance-app/sw.js \
+                _site/
+          # Offer the single-file build as a download alongside the app.
+          cp finance-app/dist/paycheck-calculator.html _site/standalone.html
+          # Stamp the service worker so each deploy gets its own cache and the
+          # previous one is dropped. Left as a constant, a fix would never land.
+          sed -i "s/__BUILD__/${GITHUB_SHA::12}/" _site/sw.js
+          # Jekyll would otherwise ignore anything starting with an underscore.
+          touch _site/.nojekyll
+
+      - name: Verify the build actually works
+        run: |
+          test -s _site/index.html
+          test -s _site/js/app.js
+          test -s _site/standalone.html
+          grep -q "${GITHUB_SHA::12}" _site/sw.js
+          # Every script the page loads must be present, or we ship a dead page.
+          for f in $(grep -o 'src="js/[^"]*"' _site/index.html | sed 's/src="//;s/"//'); do
+            test -s "_site/$f" || { echo "missing $f"; exit 1; }
+          done
+
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

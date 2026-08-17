@@ -29,15 +29,29 @@ function read(rel) {
 var html = read('index.html');
 var css = read('styles.css');
 
-// Order matters: tax-data defines the tables, calc consumes them, charts and
-// app draw with them. This is the same order index.html uses.
-var scripts = ['js/tax-data.js', 'js/calc.js', 'js/charts.js', 'js/app.js']
+// The script list is READ OUT OF index.html rather than hardcoded here. A
+// hardcoded copy silently goes stale the moment a new file is added to the
+// page, and the bundle then ships markup with no code behind it.
+var scriptSrcs = [];
+var scriptRe = /<script\s+src="([^"]+)"><\/script>/g;
+var m;
+while ((m = scriptRe.exec(html)) !== null) scriptSrcs.push(m[1]);
+
+if (!scriptSrcs.length) throw new Error('no <script src> tags found in index.html');
+
+var scripts = scriptSrcs
   .map(function (f) {
     return '/* ===== ' + f + ' ===== */\n' + read(f);
   })
   .join('\n\n');
 
 var title = (html.match(/<title>([\s\S]*?)<\/title>/) || [, 'Paycheck Calculator'])[1].trim();
+
+// Carry the page's own viewport tag rather than a hardcoded copy — the real one
+// has viewport-fit=cover on it, and a stale duplicate here would silently drop it.
+var viewport = (html.match(/<meta\s+name="viewport"[^>]*>/) || [
+  '<meta name="viewport" content="width=device-width, initial-scale=1">'
+])[0];
 
 // Pull the body, then drop the <script src> tags — they are being inlined.
 var body = (html.match(/<body[^>]*>([\s\S]*)<\/body>/) || [, ''])[1]
@@ -62,9 +76,20 @@ if (fragment) {
 } else {
   out = '<!doctype html>\n<html lang="en">\n<head>\n'
     + '<meta charset="utf-8">\n'
-    + '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+    + viewport + '\n'
     + parts[0] + '\n' + parts[1] + '\n'
     + '</head>\n<body>\n\n' + parts[2] + '\n\n' + parts[3] + '\n</body>\n</html>\n';
+}
+
+// Guard: every script in js/ must have made it into the bundle. The page loading
+// a file the bundle omits produced a build that looked fine and did nothing —
+// markup with no code behind it. Fail the build instead of shipping that again.
+var onDisk = fs.readdirSync(path.join(ROOT, 'js')).filter(function (f) { return /\.js$/.test(f); });
+var missing = onDisk.filter(function (f) { return scriptSrcs.indexOf('js/' + f) === -1; });
+if (missing.length) {
+  throw new Error(
+    'js/' + missing.join(', js/') + ' exists but is not loaded by index.html, so it '
+    + 'would be left out of the bundle. Add a <script src> tag or delete the file.');
 }
 
 var outDir = path.join(ROOT, 'dist');

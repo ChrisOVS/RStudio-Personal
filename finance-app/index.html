@@ -2,10 +2,16 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Paycheck &amp; Finance</title>
 <meta name="description" content="Work out take-home pay from an annual salary, bonus and pre-tax deductions, for any US state.">
 <link rel="stylesheet" href="styles.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="Paycheck">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#fcfcfb" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1a1a19" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💵</text></svg>">
 </head>
 <body>
@@ -19,15 +25,82 @@
     <button type="button" class="theme-toggle" id="theme-toggle">Dark mode</button>
 
     <div class="tabs" role="tablist" aria-label="Sections">
+      <button class="tab" role="tab" data-tab="health" aria-selected="false" id="tab-health">Health</button>
       <button class="tab" role="tab" data-tab="salary" aria-selected="true" id="tab-salary">Salary</button>
-      <button class="tab" role="tab" data-tab="budget" aria-selected="false">Budget <span class="soon">soon</span></button>
-      <button class="tab" role="tab" data-tab="savings" aria-selected="false">Savings <span class="soon">soon</span></button>
-      <button class="tab" role="tab" data-tab="debt" aria-selected="false">Debt <span class="soon">soon</span></button>
+      <button class="tab" role="tab" data-tab="cashflow" aria-selected="false" id="tab-cashflow">Cash flow</button>
+      <button class="tab" role="tab" data-tab="expenses" aria-selected="false" id="tab-expenses">Expenses</button>
+      <button class="tab" role="tab" data-tab="lifeevents" aria-selected="false" id="tab-lifeevents">Life events</button>
+      <button class="tab" role="tab" data-tab="savings" aria-selected="false" id="tab-savings">Savings &amp; investments</button>
     </div>
   </div>
 </header>
 
 <main class="wrap">
+
+
+  <!-- ======================================================= HEALTH TAB -->
+  <section class="tab-panel" data-panel="health" role="tabpanel" aria-labelledby="tab-health" hidden>
+
+    <div class="hl-hero card">
+      <div class="hl-dial">
+        <svg viewBox="0 0 120 120" role="img" aria-label="Overall financial health score">
+          <circle cx="60" cy="60" r="52" class="hl-ring-track"></circle>
+          <circle cx="60" cy="60" r="52" class="hl-ring-fill" id="hl-ring-fill"
+                  transform="rotate(-90 60 60)"></circle>
+        </svg>
+        <div class="hl-score-value" id="hl-score">—</div>
+      </div>
+      <div class="hl-hero-text">
+        <h2 id="hl-score-label">Not enough to say yet</h2>
+        <p id="hl-score-blurb"></p>
+        <span class="hl-counted" id="hl-score-counted"></span>
+      </div>
+    </div>
+
+    <div class="hl-metrics" id="hl-metrics"></div>
+
+    <div class="card" style="margin-top:20px">
+      <div class="card-head">
+        <h2>Your data</h2>
+        <p>Everything stays on this device. Nothing you type is ever sent anywhere.</p>
+      </div>
+
+      <div id="hl-save-status" class="note"></div>
+
+      <div class="hl-actions">
+        <button type="button" id="hl-download" class="cf-add-btn">Download a backup</button>
+        <button type="button" id="hl-copy-link" class="hl-btn">Copy a restore link</button>
+        <label class="hl-btn hl-file">
+          Load a backup
+          <input type="file" id="hl-import" accept="application/json,.json" hidden>
+        </label>
+        <button type="button" id="hl-clear" class="hl-btn is-danger">Erase everything</button>
+      </div>
+
+      <p class="hl-caution">
+        A restore link has your figures packed into it. The part after the
+        <code>#</code> never reaches any server — browsers don't send it — but treat
+        the link itself like the data: bookmark it or mail it to yourself, don't post it.
+      </p>
+
+      <textarea id="hl-link-box" class="hl-link-box" rows="3" readonly hidden
+                aria-label="Restore link"></textarea>
+      <div id="hl-save-flash" class="hl-flash" role="status"></div>
+
+      <details class="table-toggle">
+        <summary>Why is there no Google or Apple sign-in?</summary>
+        <div class="hl-explain">
+          <p>Because this app has no server. It is one file that runs entirely in your
+             browser, and it never sends anything anywhere — which is rather the point
+             when the contents are your salary.</p>
+          <p>A real sign-in needs a backend holding secrets, and it would mean uploading
+             your figures to it. The three options above cover the same ground without
+             that: this device remembers you automatically, a backup file survives a
+             wiped browser, and a restore link opens your figures on any other device.</p>
+        </div>
+      </details>
+    </div>
+  </section>
 
   <!-- ======================================================= SALARY TAB -->
   <section class="tab-panel" data-panel="salary" role="tabpanel" aria-labelledby="tab-salary">
@@ -154,6 +227,40 @@
           </details>
         </div>
 
+        <div class="card" style="margin-top:20px">
+          <div class="card-head">
+            <h2>Your pay over the next few years</h2>
+            <p>Every year grows at the default raise. Type a salary or bonus into any
+               year to pin it — a promotion, a jump, a step down — and the raise carries
+               on from there.</p>
+          </div>
+
+          <div class="pay-controls">
+            <div class="field">
+              <label for="pay-raise">Default raise <span class="hint">% a year</span></label>
+              <input type="number" id="pay-raise" step="0.5" min="-20" max="50">
+            </div>
+            <button type="button" id="pay-clear" class="cf-del">Clear pinned years</button>
+          </div>
+
+          <div id="pay-summary" class="note"></div>
+
+          <div class="table-wrap">
+            <table class="pay-table">
+              <thead>
+                <tr><th>Year</th><th>Salary</th><th>Bonus</th><th>Gross</th><th>Take-home</th><th>Eff. rate</th></tr>
+              </thead>
+              <tbody id="pay-schedule-body"></tbody>
+            </table>
+          </div>
+
+          <p style="font-size:12px;color:var(--text-muted);margin:12px 0 0">
+            Every year is taxed with 2026 rules, since later years' brackets are not
+            published yet. Real brackets index with inflation, so tax in later years is
+            slightly overstated here.
+          </p>
+        </div>
+
         <div class="chart-grid is-split" style="margin-top:20px">
 
           <div class="card">
@@ -222,27 +329,323 @@
     </div>
   </section>
 
+  <!-- ==================================================== CASH FLOW TAB -->
+  <section class="tab-panel" data-panel="cashflow" role="tabpanel" aria-labelledby="tab-cashflow" hidden>
+
+    <!-- One filter row above everything it scopes. -->
+    <div class="card cf-controls">
+      <div class="field">
+        <label for="cf-start">Starting year</label>
+        <input type="number" id="cf-start" min="1900" max="2200" step="1">
+      </div>
+      <div class="field">
+        <label for="cf-horizon">Years to project</label>
+        <input type="number" id="cf-horizon" min="1" max="60" step="1">
+      </div>
+      <div class="field">
+        <label for="cf-opening">Starting balance</label>
+        <div class="input-money"><input type="text" id="cf-opening" inputmode="decimal" placeholder="0"></div>
+      </div>
+      <div class="field">
+        <label for="cf-return">Expected return <span class="hint">% a year</span></label>
+        <input type="number" id="cf-return" step="0.5" min="-20" max="30">
+      </div>
+    </div>
+
+    <div class="stats" style="margin-top:20px">
+      <div class="stat">
+        <div class="k">Net this year</div>
+        <div class="v is-hero" id="cf-stat-net">—</div>
+        <div class="sub" id="cf-stat-net-sub"></div>
+      </div>
+      <div class="stat">
+        <div class="k">Net incl. savings</div>
+        <div class="v" id="cf-stat-withsavings">—</div>
+        <div class="sub" id="cf-stat-withsavings-sub"></div>
+      </div>
+      <div class="stat">
+        <div class="k">Cash balance</div>
+        <div class="v" id="cf-stat-balance">—</div>
+        <div class="sub" id="cf-stat-balance-sub"></div>
+      </div>
+      <div class="stat">
+        <div class="k">Of that, growth</div>
+        <div class="v" id="cf-stat-growth">—</div>
+        <div class="sub" id="cf-stat-growth-sub"></div>
+      </div>
+      <div class="stat">
+        <div class="k">Shortfall year</div>
+        <div class="v" id="cf-stat-shortfall">—</div>
+        <div class="sub" id="cf-stat-shortfall-sub"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:20px">
+      <div class="card-head">
+        <h2>Cash flow by transaction</h2>
+        <p>Type an amount in any year to set it. Every later year carries that figure
+           forward until you change it again — so you only fill in the years that differ.
+           Inherited figures are shown in lighter text. Transaction rows hold the amount
+           per period shown in the Cadence column; the group and total rows are annual.</p>
+      </div>
+
+      <div id="cf-source-note" class="note"></div>
+
+      <div class="table-wrap cf-table-wrap">
+        <table class="cf-table">
+          <thead id="cf-thead"></thead>
+          <tbody id="cf-tbody"></tbody>
+          <tfoot id="cf-tfoot"></tfoot>
+        </table>
+      </div>
+
+      <div class="cf-legend">
+        <span><i class="cf-swatch is-explicit"></i> Set by you</span>
+        <span><i class="cf-swatch is-inherited"></i> Carried forward from an earlier year</span>
+        <span><i class="cf-swatch is-locked"></i> Fed from another tab</span>
+      </div>
+    </div>
+
+    <div class="chart-grid" style="margin-top:20px">
+      <div class="card">
+        <div class="card-head">
+          <h2>Net cash flow by year</h2>
+          <p>What is left over, or missing, each year once everything is counted.</p>
+        </div>
+        <div class="chart-scroll"><svg id="chart-netflow"></svg></div>
+        <div class="legend">
+          <span><i style="background:var(--surplus)"></i> Surplus</span>
+          <span><i style="background:var(--deficit)"></i> Shortfall</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Projected balance</h2>
+          <p>Your running balance with investment growth, against what you would have
+             from saving alone. The gap between the lines is the compounding.</p>
+        </div>
+        <div class="chart-scroll"><svg id="chart-balance"></svg></div>
+      </div>
+    </div>
+
+</section>
+
   <!-- ================================================== PLACEHOLDER TABS -->
-  <section class="tab-panel" data-panel="budget" role="tabpanel" hidden>
-    <div class="card placeholder">
-      <h2>Budget</h2>
-      <p>Not built yet. The plan is to take the take-home number from the Salary tab and
-         split it across fixed costs, variable spending and savings.</p>
+  <section class="tab-panel" data-panel="expenses" role="tabpanel" aria-labelledby="tab-expenses" hidden>
+
+    <div class="card cf-controls">
+      <div class="field">
+        <label for="ex-inflation">Default inflation <span class="hint">% a year</span></label>
+        <input type="number" id="ex-inflation" step="0.1" min="-10" max="30">
+      </div>
+      <div class="field">
+        <label for="ex-buffer">Safety buffer <span class="hint">% on everything</span></label>
+        <input type="number" id="ex-buffer" step="1" min="0" max="100">
+      </div>
+      <div class="field ex-presets">
+        <label>Quick set <span class="hint">buffer</span></label>
+        <div class="ex-preset-row">
+          <button type="button" class="ex-buffer-preset" data-pct="0">None</button>
+          <button type="button" class="ex-buffer-preset" data-pct="10">10%</button>
+          <button type="button" class="ex-buffer-preset" data-pct="20">20%</button>
+          <button type="button" class="ex-buffer-preset" data-pct="30">30%</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Buffer in use</label>
+        <div class="ex-buffer-out" id="ex-buffer-out">0%</div>
+      </div>
+    </div>
+
+    <div class="stats" style="margin-top:20px">
+      <div class="stat">
+        <div class="k">Total a month</div>
+        <div class="v is-hero" id="ex-stat-monthly">&mdash;</div>
+        <div class="sub" id="ex-stat-monthly-sub"></div>
+      </div>
+      <div class="stat">
+        <div class="k">Total a year</div>
+        <div class="v" id="ex-stat-annual">&mdash;</div>
+        <div class="sub" id="ex-stat-annual-sub"></div>
+      </div>
+      <div class="stat">
+        <div class="k">Buffer</div>
+        <div class="v" id="ex-stat-buffer">&mdash;</div>
+        <div class="sub" id="ex-stat-buffer-sub"></div>
+      </div>
+      <div class="stat">
+        <div class="k">Same basket later</div>
+        <div class="v" id="ex-stat-future">&mdash;</div>
+        <div class="sub" id="ex-stat-future-sub"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:20px">
+      <div class="card-head">
+        <h2>Regular expenses</h2>
+        <p>Amounts are per period. Leave the inflation box blank to follow the default
+           above, or type a number to pin that one expense to its own rate.</p>
+      </div>
+
+      <div id="ex-buffer-note" class="note"></div>
+
+      <div class="ex-head">
+        <span>Expense</span><span>Category</span><span>How often</span>
+        <span>Amount</span><span>Inflation</span><span>A year</span><span></span>
+      </div>
+      <div id="ex-list"></div>
+
+      <div class="cf-add-row">
+        <select id="ex-add-category" aria-label="Category for the new expense"></select>
+        <button type="button" id="ex-add" class="cf-add-btn">Add expense</button>
+      </div>
+    </div>
+
+    <div class="chart-grid" style="margin-top:20px">
+      <div class="card">
+        <div class="card-head">
+          <h2>Where the money goes</h2>
+          <p>Annual spending by category, with the buffer shown separately.</p>
+        </div>
+        <div class="chart-scroll"><svg id="chart-expense-categories"></svg></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>What it costs over time</h2>
+          <p>The same basket, inflated year by year. The lighter band on top is the buffer.</p>
+        </div>
+        <div class="chart-scroll"><svg id="chart-expense-growth"></svg></div>
+        <div class="legend">
+          <span><i style="background:var(--series-1)"></i> Expenses</span>
+          <span><i style="background:var(--series-1-soft)"></i> Safety buffer</span>
+        </div>
+      </div>
     </div>
   </section>
 
-  <section class="tab-panel" data-panel="savings" role="tabpanel" hidden>
-    <div class="card placeholder">
-      <h2>Savings</h2>
-      <p>Not built yet. The plan is compounding projections for retirement and
-         brokerage contributions, driven off the same salary inputs.</p>
+  <section class="tab-panel" data-panel="lifeevents" role="tabpanel" aria-labelledby="tab-lifeevents" hidden>
+
+    <div class="card cf-controls">
+      <div class="field">
+        <label for="le-inflation">Inflation for future events <span class="hint">% a year</span></label>
+        <input type="number" id="le-inflation" step="0.1" min="-10" max="30">
+      </div>
+      <div class="field" style="grid-column:span 2">
+        <label>How this works</label>
+        <p style="font-size:12.5px;color:var(--text-secondary);margin:0">
+          Tick <strong>Inflate</strong> on an event to enter it in today's money and have it
+          grown to the year it lands in — a $100k deposit eight years out will not cost $100k.
+        </p>
+      </div>
+    </div>
+
+    <div class="stats" style="margin-top:20px">
+      <div class="stat">
+        <div class="k">Total going out</div>
+        <div class="v is-hero" id="le-stat-total">&mdash;</div>
+        <div class="sub" id="le-stat-total-sub"></div>
+      </div>
+      <div class="stat">
+        <div class="k">Biggest single year</div>
+        <div class="v" id="le-stat-biggest">&mdash;</div>
+        <div class="sub" id="le-stat-biggest-sub"></div>
+      </div>
+      <div class="stat">
+        <div class="k">Coming in</div>
+        <div class="v" id="le-stat-in">&mdash;</div>
+        <div class="sub" id="le-stat-in-sub"></div>
+      </div>
+      <div class="stat">
+        <div class="k">Added by inflation</div>
+        <div class="v" id="le-stat-inflation">&mdash;</div>
+        <div class="sub" id="le-stat-inflation-sub"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:20px">
+      <div class="card-head">
+        <h2>Planned life events</h2>
+        <p>One-off, lumpy money in a particular year. Spread over more than one year
+           for things like tuition that repeat for a while.</p>
+      </div>
+
+      <div class="le-head">
+        <span>Event</span><span>Category</span><span>Direction</span><span>Year</span>
+        <span>Amount</span><span>Years</span><span>Today's money</span><span>Cost</span><span></span>
+      </div>
+      <div id="le-list"></div>
+
+      <div class="cf-add-row">
+        <select id="le-add-category" aria-label="Category for the new event"></select>
+        <button type="button" id="le-add" class="cf-add-btn">Add life event</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:20px">
+      <div class="card-head">
+        <h2>When they land</h2>
+        <p>Net effect per year. The tall bars are the ones to plan around.</p>
+      </div>
+      <div class="chart-scroll"><svg id="chart-events"></svg></div>
+      <div class="legend">
+        <span><i style="background:var(--surplus)"></i> Money in</span>
+        <span><i style="background:var(--deficit)"></i> Money out</span>
+      </div>
     </div>
   </section>
 
-  <section class="tab-panel" data-panel="debt" role="tabpanel" hidden>
-    <div class="card placeholder">
-      <h2>Debt</h2>
-      <p>Not built yet. The plan is avalanche vs snowball payoff schedules.</p>
+  <!-- ================================================ SAVINGS TAB -->
+  <section class="tab-panel" data-panel="savings" role="tabpanel" aria-labelledby="tab-savings" hidden>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="k">Projected total</div>
+        <div class="v is-hero" id="sv-stat-total">—</div>
+        <div class="sub" id="sv-stat-total-sub"></div>
+      </div>
+      <div class="stat">
+        <div class="k">Going in each year</div>
+        <div class="v" id="sv-stat-contrib">—</div>
+        <div class="sub" id="sv-stat-contrib-sub"></div>
+      </div>
+      <div class="stat">
+        <div class="k">Of that, growth</div>
+        <div class="v" id="sv-stat-growth">—</div>
+        <div class="sub" id="sv-stat-growth-sub"></div>
+      </div>
+      <div class="stat">
+        <div class="k">Out of take-home</div>
+        <div class="v" id="sv-stat-takehome">—</div>
+        <div class="sub" id="sv-stat-takehome-sub"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:20px">
+      <div class="card-head">
+        <h2>Your accounts</h2>
+        <p>Each account keeps its own balance, contribution and expected return.
+           The horizon matches the Cash flow tab.</p>
+      </div>
+
+      <div id="sv-note" class="note"></div>
+
+      <div id="sv-accounts" class="sv-accounts"></div>
+
+      <div class="cf-add-row">
+        <select id="sv-add-type" aria-label="Type of account to add"></select>
+        <button type="button" id="sv-add" class="cf-add-btn">Add account</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:20px">
+      <div class="card-head">
+        <h2>Projected balance</h2>
+        <p>Everything combined, against what you would have from contributions alone.
+           The gap between the lines is the growth.</p>
+      </div>
+      <div class="chart-scroll"><svg id="chart-savings"></svg></div>
     </div>
   </section>
 
@@ -250,7 +653,28 @@
 
 <script src="js/tax-data.js"></script>
 <script src="js/calc.js"></script>
+<script src="js/cashflow.js"></script>
+<script src="js/savings.js"></script>
+<script src="js/expenses.js"></script>
+<script src="js/life-events.js"></script>
+<script src="js/pay-schedule.js"></script>
+<script src="js/health.js"></script>
+<script src="js/storage.js"></script>
 <script src="js/charts.js"></script>
+<script src="js/cashflow-ui.js"></script>
+<script src="js/savings-ui.js"></script>
+<script src="js/expenses-ui.js"></script>
+<script src="js/life-events-ui.js"></script>
+<script src="js/health-ui.js"></script>
 <script src="js/app.js"></script>
+<script>
+// Offline support, and only over http(s) — a file:// page has no service worker
+// and registering there just throws into the console for no reason.
+if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
+  addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js').catch(function () { /* offline is optional */ });
+  });
+}
+</script>
 </body>
 </html>

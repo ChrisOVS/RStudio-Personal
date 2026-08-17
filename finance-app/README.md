@@ -5,17 +5,56 @@ salary, a bonus, your pre-tax deductions and a state, and it breaks the year
 down into take-home pay, federal tax, state tax and FICA — weekly, bi-weekly,
 semi-monthly, monthly or annually.
 
-Tab one (Salary) is built. Budget, Savings and Debt are stubs.
+Six tabs: **Health**, **Salary**, **Cash flow**, **Expenses**, **Life events**
+and **Savings & investments**. Salary, Expenses and Life events feed the cash
+flow ledger; Savings and Health read from it.
 
-## Running it
+## Running it on your PC
 
-No build step, no dependencies, no network calls. Open the file:
+Double-click one of these:
+
+| | |
+|---|---|
+| **Windows** | `Start Paycheck (Windows).bat` |
+| **Mac** | `Start Paycheck (Mac).command` |
+| **Linux** | `start-mac-linux.sh` |
+
+It opens in your browser and **saves to a real file on your machine**:
+
+```
+finance-app/data/paycheck-finance.json
+```
+
+Copy that file to back it up or move it to another computer. The last 20
+versions are kept in `data/backups/` — the server snapshots before every write,
+so a bad import is recoverable.
+
+You need **either Node or Python 3** installed; not both, and nothing else. The
+launcher finds whichever you have and tells you where to get one if you have
+neither. The server is standard library only — no packages, nothing to patch.
+
+It binds to `127.0.0.1`, so nothing on your network can reach it even on shared
+wifi. Press Ctrl+C in the window to stop.
+
+### With nothing installed at all
+
+`dist/paycheck-calculator.html` opens straight in a browser and works fully — it
+just saves inside the browser rather than to a file.
+
+## Other ways to run it
+
+**Hosted:** pushed to `main`, it deploys to GitHub Pages automatically — see
+`.github/workflows/pages.yml`. The site is installable to a phone home screen and
+works offline.
+
+**Locally**, no build step, no dependencies, no network calls:
 
 ```
 open finance-app/index.html
 ```
 
-Or serve it if you prefer a real origin:
+Or serve it if you want the service worker and manifest to work, which need a
+real origin:
 
 ```
 cd finance-app && python3 -m http.server 8000
@@ -26,11 +65,13 @@ cd finance-app && python3 -m http.server 8000
 The calculation engine is a pure module with no DOM, so it runs under plain Node:
 
 ```
-cd finance-app && node test/calc.test.js
+cd finance-app && npm test
 ```
 
-63 assertions, all with expected values worked out by hand from the published
-2026 tables rather than read back out of the implementation.
+430 assertions across six suites — 63 for the tax engine, 98 for the cash flow
+ledger, 56 for savings, 67 for expenses, 83 for life events and the pay schedule,
+63 for health. Expected values are worked out by hand from the published 2026
+tables rather than read back out of the implementation.
 
 ## What it models
 
@@ -113,24 +154,331 @@ finance-app/
 ├── styles.css          design tokens, light/dark, layout
 ├── js/
 │   ├── tax-data.js     2026 federal + 50 states + DC parameters
-│   ├── calc.js         the engine — pure, no DOM, testable
+│   ├── calc.js         the tax engine — pure, no DOM, testable
+│   ├── cashflow.js     the shared ledger — pure, no DOM, testable
+│   ├── savings.js      accounts and balance projection — pure, testable
+│   ├── expenses.js     recurring expenses, inflation, buffer — pure, testable
+│   ├── life-events.js  one-off lumpy money — pure, testable
+│   ├── pay-schedule.js expected pay by year — pure, testable
+│   ├── health.js       financial health metrics — pure, testable
+│   ├── storage.js      save, restore, export — pure, testable
 │   ├── charts.js       hand-rolled SVG charts, no chart library
-│   └── app.js          input wiring and rendering
-└── test/calc.test.js   node test suite
+│   ├── cashflow-ui.js  the cash flow tab: table, editor, charts
+│   ├── savings-ui.js   the savings & investments tab
+│   ├── expenses-ui.js  the expenses tab
+│   ├── life-events-ui.js  the life events tab
+│   ├── health-ui.js    the health tab and the data panel
+│   └── app.js          salary tab wiring and rendering
+└── test/
+    ├── calc.test.js
+    ├── cashflow.test.js
+    ├── savings.test.js
+    ├── expenses.test.js
+    ├── life-events.test.js
+    └── health.test.js
 ```
 
 `tax-data.js` and `calc.js` export via UMD so the browser and the test suite run
 the same code — the numbers on screen are the numbers under test.
 
+## The cash flow ledger
+
+`js/cashflow.js` is the shared spine the other tabs hang off. It holds a list of
+**transactions** projected across a horizon of years: rows are transactions,
+columns are years.
+
+Two rules carry most of the weight.
+
+### Carry-forward
+
+A transaction's `amounts` map is **sparse**, keyed by year. A year with no entry
+inherits the most recent earlier year that has one:
+
+```js
+{ label: 'Rent', cadence: 'monthly', amounts: { 2026: 2400, 2031: 2900 } }
+// 2026-2030 -> 2,400/mo     2031 onward -> 2,900/mo
+```
+
+So you only type the years that change. In the table, a figure you set reads in
+full-strength ink and an inherited one is muted, so the rule is visible rather
+than something you have to remember. Clearing a cell reverts it to inheriting;
+clearing the last remaining entry is refused, so a row can't be silently zeroed.
+
+An optional per-transaction `growth` fills the gaps with a yearly increase, and
+**re-anchors** on every explicit entry — a value you typed always means exactly
+what it says.
+
+### Derived vs manual rows
+
+Other tabs don't write rows directly. They register a provider:
+
+```js
+CashFlowTab.registerSource('salary', function () {
+  return [{ label: 'Take-home pay', group: 'Income', kind: 'income',
+            cadence: 'annual', startYear: 2026, amounts: { 2026: 94000 } }];
+});
+```
+
+On every refresh each provider is re-run and its rows **replace** the previous
+batch from that source, so changing your salary can never leave a stale income
+row behind. Derived rows are locked in the table — editing them by hand would be
+silently overwritten on the next refresh. Only manual rows are hand-editable and
+persisted to localStorage.
+
+The Salary tab pushes exactly one row: **net take-home pay**, as income. See
+"Not counting the same money twice" below for why it is only one.
+
+### What it projects
+
+Per year: income, expenses, net, and two running balances — `cumulativeNet`
+(saved, no growth) and `balance` (compounded at `annualReturn`). It also reports
+`shortfallYear`, the first year the balance goes negative.
+
+Growth credits the opening balance plus **half** the year's net flow, since
+contributions arrive spread across the year. Compounding the full contribution
+would overstate returns by roughly half a year, every year.
+
+Amounts are stored at the transaction's own cadence — a monthly row holds a
+per-month figure — so entry stays natural and nothing goes stale if the cadence
+changes.
+
+## Savings & investments
+
+Each account carries its own balance, contribution, expected return and — the
+part that matters — **where the contribution comes from**:
+
+| Type | Comes from | On the cash flow table? |
+|---|---|---|
+| 401(k) / 403(b), payroll HSA | Pre-tax payroll | **No** |
+| IRA, brokerage, cash savings | Your take-home | **Yes**, as an outflow |
+
+The 401(k) row is **mirrored from the Salary tab's pre-tax field** rather than
+asked for twice, so there is one place to change it and no way for the two to
+disagree. The employer match is the one thing this tab adds to it.
+
+`fromPayroll` is a property of the account *type* and cannot be set by hand —
+letting it be chosen freely would make double-counting a one-click mistake.
+
+### Not counting the same money twice
+
+Take-home pay is already net of tax, the 401(k) deferral and health premiums. So
+the ledger takes **net take-home as the income line, and nothing else from the
+Salary tab.**
+
+An earlier version also pushed the 401(k) and health premiums through as outflow
+rows. That subtracted the same money twice and understated every year's net — on
+a $145k salary with a $12k deferral it reported $82k of net cash flow instead of
+$94k. Payroll deductions now belong to the tab that owns them: the Savings tab
+shows the 401(k) building a balance without ever touching cash flow.
+
+Money invested **out of take-home** is a different case and does belong on the
+table — it competes with the rest of your spending. Employer match never does:
+it is money arriving, not leaving.
+
+## Expenses
+
+Every recurring outgoing lives here — this is where you type things in; the Cash
+flow tab reads the result.
+
+### Inflation, per expense with a shared default
+
+Rent and groceries rarely climb at the same rate, so each expense may pin its own
+rate. Leave the box blank and it follows the tab's default, which means changing
+the default moves everything that has not been pinned — the common case.
+
+`null` and `0` are deliberately different: `null` means "follow the default",
+while a typed `0` pins the expense at 0% even when the default is 3%. Collapsing
+those two would make it impossible to say "this one does not inflate".
+
+### The safety buffer
+
+One percentage padding the whole set, for the fact that budgets are optimistic.
+It reaches the cash flow ledger as **its own row**, not folded into each expense,
+so you can always see what the padding costs and take it back off. Silently
+inflating every line would make the numbers untraceable.
+
+The buffer row carries an **explicit amount for every year** rather than a single
+growth rate. It has to: the expenses underneath it grow at different rates and
+start and stop in different years, so a lone growth rate would drift away from
+being a true percentage. It is recomputed against the real total each year.
+
+## Overriding a derived row
+
+The Cash flow tab takes its rows from the other tabs, but any single year can
+still be typed over. That edit is stored as an **override** — kept separately,
+keyed by transaction and year, and re-applied after every rebuild.
+
+The result is that changing rent on the Expenses tab flows through to every year
+*except* the one you pinned by hand. Clearing the cell hands that year back.
+Overridden cells are marked with a rule as well as weight, so the distinction
+survives a greyscale print.
+
+## Life events
+
+The lumpy stuff that lands in one year: a wedding, a car, a house deposit, an
+inheritance. Same idea as Expenses, but each row belongs to a year rather than
+recurring.
+
+**Today's money vs then's money.** Tick *Inflate* and the amount is treated as
+today's money and compounded to the year it lands in — a $100k deposit five years
+out is budgeted at what you will actually have to find, and the uplift is
+reported so the assumption stays visible.
+
+**Spreading.** `spreadYears` repeats the amount for a run of years (three years of
+tuition). One year becomes a `once` ledger row; more becomes an annual row
+bounded by an end year.
+
+## Pay growth
+
+The Salary tab holds what you earn *today*. The pay table projects it forward:
+every year grows at a default raise, and you can type a salary or bonus into any
+year to pin it — a promotion, a jump, a step down. The raise then re-anchors and
+carries on from the pinned figure.
+
+Salary and bonus pin independently, since a promotion usually moves the bonus
+target by a different amount than the base.
+
+Each year's take-home is computed by running **the full tax model on that year's
+pay**, not by escalating year one's take-home. Tax is progressive, so a raise does
+not lift take-home proportionally — a flat growth rate on the net figure would
+overstate every year after a promotion. Every year is taxed with 2026 rules, since
+later brackets are not published; real brackets index with inflation, so tax in
+later years is slightly overstated.
+
+## Cash left over vs better off
+
+The cash flow table ends with two different bottom lines, because they answer
+different questions:
+
+- **Net cash for the year** — what is left liquid after everything, including
+  money moved into savings.
+- **Net including savings** — the same figure with your contributions added back.
+  Money moved into an investment account is not spent; it is still yours. This is
+  the "how much better off am I" number.
+
+Employer match is deliberately excluded from the add-back: it builds your balance
+on the Savings tab but never passed through your hands, so counting it as retained
+cash would misstate what you kept.
+
+## Health
+
+Seven ratios against the usual rules of thumb, each with the reasoning attached
+so the number is never just a colour: savings rate, emergency fund, spending vs
+take-home, housing share, whether the plan holds up, retirement progress against
+25× spending, and effective tax rate for context.
+
+Two rules keep the score honest:
+
+- **A metric with no data reports `unknown` and is left out of the score
+  entirely** — not scored zero. An empty app says "not enough to say yet"; it
+  does not tell you your finances are broken because you have not typed anything.
+- **Tax is reported, not scored.** Most of it is not a choice, so weighting it
+  would punish you for your bracket.
+
+Cards are ordered worst-first, so the thing to fix is at the top. Status colour
+is never alone — every card carries a worded chip and a coloured rule.
+
+## Saving your data
+
+There is no server. The app is one file that runs entirely in your browser and
+never sends anything anywhere, which is also why there is no Google or Apple
+sign-in: OAuth needs a backend holding client secrets, and any such flow would
+mean your salary leaving your machine. Persistence is done three ways instead:
+
+| | What it survives | Effort |
+|---|---|---|
+| **Automatic** (localStorage) | Closing the tab, restarting the browser | none |
+| **Backup file** (JSON) | Clearing your browser, moving machines | one click |
+| **Restore link** (URL fragment) | Any device, no account | one click |
+
+All three carry the same payload, so a file saved today opens from a link
+tomorrow. Restoring clears existing keys first rather than merging — a
+half-merged ledger would be worse than either version.
+
+The backup uses the artifact `downloads` capability where the page has it, and
+falls back to an ordinary blob download everywhere else.
+
+## Mobile
+
+The one that matters: **iOS Safari zooms the page whenever a focused control has
+a font-size under 16px.** Every control is therefore 16px on coarse-pointer
+devices. The usual shortcut — `maximum-scale=1` in the viewport tag — also stops
+the zoom, by disabling pinch-zoom entirely, which breaks the page for anyone who
+needs to magnify it. That is not a trade worth making, so it is not used here.
+
+## Hosting
+
+`.github/workflows/pages.yml` builds and deploys on every push to `main` that
+touches `finance-app/`. The job runs the full test suite first — a red build
+never reaches the site — then assembles `_site`, verifies every script the page
+references is actually present, and deploys.
+
+The standalone single-file build is published alongside as `/standalone.html`,
+so there is always one file you can save and open with no server at all.
+
+### Offline and installable
+
+A manifest and a service worker make the hosted copy installable to a phone home
+screen and usable with no connection.
+
+The service worker strategy is deliberately conservative, because the classic
+failure is a page that caches itself and never updates again:
+
+- **Navigations: network first**, cache as fallback. Online you always get the
+  current version; offline you get the last one that worked.
+- **Assets: stale-while-revalidate.** Instant from cache, refreshed in the
+  background.
+
+Its cache name is stamped with the commit SHA at deploy time, so each deploy gets
+its own cache and the previous one is deleted on activate. Left as a constant, a
+fix would never reach anyone.
+
+### A note on the restore link
+
+The link packs your figures into the URL **fragment**. Browsers never send the
+part after `#` to a server, so hosting the app publicly does not expose anything
+— but the link itself carries your data, so it is for bookmarking and mailing to
+yourself, not for posting. The app says so next to the button.
+
+## How the local file works
+
+The six tab modules still write to `localStorage` exactly as they always did and
+know nothing about any of this. `storage.js` wraps `localStorage.setItem`, and a
+debounced sync mirrors those writes to the file. One place to get right, and a
+tab added later cannot forget to save.
+
+On startup the **file wins** over the browser copy — it is the durable one, the
+browser is just this session's working state. That is what makes a wiped browser
+or a different browser pick up exactly where you left off.
+
+The file is only adopted when it actually **differs** from what the browser holds.
+An earlier version applied it unconditionally and reloaded to let the tabs re-read
+it, which meant reloading on every single load once the file had anything in it —
+a permanent reload loop, 79 page loads in 8 seconds.
+
+Writes go to a temp file and are renamed into place. Rename is atomic, so an
+interruption mid-write leaves the previous file intact rather than a truncated one.
+
 ## Charts
 
-Three, all inline SVG with hover tooltips, keyboard focus and a table-view twin:
+Eight, all inline SVG with hover tooltips and keyboard focus:
 
 1. **Where your gross pay goes** — one bar per component, single hue.
 2. **How your federal tax is built** — tax generated inside each bracket, with
    your marginal bracket emphasised.
 3. **Effective vs marginal rate** — both series on one axis (both are
    percentages), with a marker at your salary.
+4. **Net cash flow by year** — diverging bars, surplus against shortfall, off a
+   zero baseline.
+5. **Projected balance** (Cash flow) — balance with growth against contributions
+   alone, both in dollars on one axis, so the gap between them is exactly the
+   compounding.
+6. **Projected balance** (Savings) — the same treatment across all accounts.
+7. **What it costs over time** (Expenses) — stacked bars, the buffer as a lighter
+   band of the same hue on top, because it is padding on the bar beneath rather
+   than a different kind of thing.
+8. **When they land** (Life events) — diverging bars off a zero baseline, so the
+   year that breaks a plan is the one that stands out.
 
 Colors come from a palette validated for colour-blind separation and contrast in
 both light and dark mode. An earlier draft used a stacked bar for chart 1; it was
@@ -150,5 +498,7 @@ That writes `dist/paycheck-calculator.html` — around 90 KB, fully self-contain
 works offline. `--fragment` writes a version without the document wrapper for
 hosts that supply their own.
 
-The bundle is generated from the real source files, so it can never drift from
-what the tests run against.
+The script list is **read out of `index.html`**, not hardcoded, and the build
+fails if any file in `js/` is not loaded by the page. A hardcoded list had gone
+stale once and shipped a bundle containing the Cash flow markup with none of its
+code — a build that looked fine and did nothing.

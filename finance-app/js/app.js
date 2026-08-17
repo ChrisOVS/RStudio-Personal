@@ -77,7 +77,10 @@
    *  never jumps around mid-entry. */
   function formatMoneyField(id) {
     var n = numFromField(id);
-    $(id).value = n > 0 ? n.toLocaleString('en-US') : '';
+    var next = n > 0 ? n.toLocaleString('en-US') : '';
+    // Writing an identical value still marks the field dirty and fires `change`
+    // on blur, which would re-render for no reason. Only touch it if it differs.
+    if ($(id).value !== next) $(id).value = next;
   }
 
   function writeInputs(v) {
@@ -119,6 +122,225 @@
     renderRateChart(input, r);
     renderTables(r, per, freq);
     renderStateNote(r);
+    renderPaySchedule();
+
+    // Keep the last result where the cash flow source provider can read it, then
+    // ask the ledger to rebuild so the income row tracks this salary.
+    latestResult = r;
+    // The Savings tab mirrors the 401(k) figure, so let it redraw before the
+    // ledger rebuilds and picks up both tabs' rows in one pass.
+    if (window.SavingsTab) window.SavingsTab.onSalaryChange();
+    if (window.CashFlowTab) window.CashFlowTab.refresh();
+  }
+
+  var latestResult = null;
+
+  /* ------------------------------------------------------------ pay schedule -- */
+
+  var SCHEDULE_KEY = 'finance-app.payschedule.v1';
+
+  var paySchedule = (function () {
+    var schedule = { defaultRaise: 0.03, salaryByYear: {}, bonusByYear: {} };
+
+    try {
+      var raw = localStorage.getItem(SCHEDULE_KEY);
+      if (raw) schedule = PaySchedule.normalize(JSON.parse(raw));
+    } catch (e) { /* private mode or bad data — keep the default */ }
+
+    function persist() {
+      try { localStorage.setItem(SCHEDULE_KEY, JSON.stringify(schedule)); } catch (e) { /* ignore */ }
+    }
+
+    /**
+     * Run the schedule over `years`, taxing each year's pay properly. Every
+     * other input (state, filing status, deductions) is held at its current
+     * value — this models a pay path, not a life change.
+     */
+    function projectFor(years) {
+      var input = readInputs();
+      return PaySchedule.project(
+        schedule, years, input.salary, input.bonus,
+        function (salary, bonus) {
+          return Calc.calculate({
+            salary: salary,
+            bonus: bonus,
+            retirement: input.retirement,
+            section125: input.section125,
+            state: input.state,
+            status: input.status
+          });
+        }
+      );
+    }
+
+    return {
+      get: function () { return schedule; },
+      projectFor: projectFor,
+      setRaise: function (rate) { schedule.defaultRaise = rate; persist(); },
+      setPay: function (field, year, value) {
+        schedule = PaySchedule.setPay(schedule, field, year, value);
+        persist();
+      },
+      reset: function () {
+        schedule = { defaultRaise: schedule.defaultRaise, salaryByYear: {}, bonusByYear: {} };
+        persist();
+      }
+    };
+  })();
+
+  /**
+   * The pay-path table: one row per year, salary and bonus editable.
+   *
+   * The first row is the Salary tab's own figures and is read-only here — there
+   * is one place to say what you earn today. Later years show the projected
+   * figure in muted ink until you type one, which pins it.
+   */
+  function renderPaySchedule() {
+    var years = window.CashFlowTab
+      ? CashFlow.yearRange(window.CashFlowTab.getState())
+      : [new Date().getFullYear()];
+    // The near term is what anyone can actually forecast; the rest is the raise.
+    var shown = years.slice(0, Math.min(years.length, 10));
+    var proj = paySchedule.projectFor(shown);
+
+    if (document.activeElement !== $('pay-raise')) {
+      $('pay-raise').value = (paySchedule.get().defaultRaise * 100).toFixed(1).replace(/\.0$/, '');
+    }
+
+    var body = $('pay-schedule-body');
+
+    // Only rebuild the DOM when the SET OF YEARS changes. Re-creating the rows
+    // on every render tore out whatever cell was focused — and because a blur
+    // reformat fires a change event, that could happen in the middle of the
+    // click that was trying to focus a cell, sending your keystrokes to the
+    // field you just left. Structure is cached; values are written in place.
+    var signature = shown.join(',');
+    if (body.dataset.sig !== signature) {
+      buildPayRows(body, proj);
+      body.dataset.sig = signature;
+    }
+    updatePayRows(body, proj);
+
+    var pinned = proj.pinnedYears.length;
+    $('pay-summary').innerHTML = '<strong>'
+      + money(proj.startGross) + ' → ' + money(proj.endGross)
+      + '</strong> gross by ' + shown[shown.length - 1]
+      + ' (' + proj.grossMultiple.toFixed(2) + '× today). '
+      + (pinned
+          ? pinned + ' year' + (pinned === 1 ? '' : 's') + ' pinned by hand; the rest grow at the default raise.'
+          : 'Every year grows at the default raise. Type into any cell to pin a promotion.');
+  }
+
+  function buildPayRows(body, proj) {
+    body.innerHTML = '';
+    proj.rows.forEach(function (row) {
+      var tr = document.createElement('tr');
+      tr.dataset.year = row.year;
+      if (row.isBaseYear) tr.className = 'is-base';
+
+      tr.innerHTML = '<td class="pay-year"></td>'
+        + payCell('salary', row)
+        + payCell('bonus', row)
+        + '<td class="pay-derived" data-out="gross"></td>'
+        + '<td class="pay-derived" data-out="takeHome"></td>'
+        + '<td class="pay-derived" data-out="rate"></td>';
+
+      tr.querySelectorAll('input[data-field]').forEach(function (input) {
+        input.addEventListener('change', function () {
+          var raw = String(input.value).trim();
+          paySchedule.setPay(input.dataset.field, Number(input.dataset.year),
+            raw === '' ? null : raw.replace(/[$,\s]/g, ''));
+          render();
+        });
+        input.addEventListener('keydown', function (e) { if (e.key === 'Enter') input.blur(); });
+      });
+
+      body.appendChild(tr);
+    });
+  }
+
+  function payCell(field, row) {
+    if (row.isBaseYear) return '<td class="pay-derived" data-out="' + field + '"></td>';
+    return '<td class="pay-cell" data-cell="' + field + '">'
+      + '<input type="text" inputmode="decimal" data-field="' + field + '" data-year="' + row.year + '"'
+      + ' aria-label="' + field + ' in ' + row.year + '">'
+      + '</td>';
+  }
+
+  function updatePayRows(body, proj) {
+    proj.rows.forEach(function (row, i) {
+      var tr = body.children[i];
+      if (!tr) return;
+
+      tr.querySelector('.pay-year').innerHTML = row.year
+        + (row.isBaseYear ? ' <span class="cf-badge">today</span>' : '');
+
+      ['salary', 'bonus'].forEach(function (field) {
+        var value = field === 'salary' ? row.salary : row.bonus;
+        var pinned = field === 'salary' ? row.salaryPinned : row.bonusPinned;
+        var cell = tr.querySelector('[data-cell="' + field + '"]');
+
+        if (!cell) {
+          // Base-year figures are read-only here: one place says what you earn today.
+          tr.querySelector('[data-out="' + field + '"]').textContent = money(value);
+          return;
+        }
+        cell.classList.toggle('is-pinned', !!pinned);
+        var input = cell.querySelector('input');
+        // Never overwrite the box someone is typing into.
+        if (document.activeElement !== input) {
+          input.value = Math.round(value).toLocaleString('en-US');
+        }
+        input.title = pinned
+          ? 'Pinned. Clear the cell to go back to the default raise.'
+          : 'Projected at the default raise. Type a figure to pin this year.';
+      });
+
+      tr.querySelector('[data-out="gross"]').textContent = money(row.gross);
+      tr.querySelector('[data-out="takeHome"]').textContent = money(row.takeHome);
+      tr.querySelector('[data-out="rate"]').textContent = pct(row.effectiveRate);
+    });
+  }
+
+
+
+  /**
+   * What this tab contributes to the cash flow ledger: net take-home pay, one
+   * explicit figure per year, and nothing else.
+   *
+   * Take-home is ALREADY net of tax, the 401(k) deferral and health premiums.
+   * An earlier version also pushed those deductions through as outflow rows,
+   * which subtracted the same money twice and understated every year's net.
+   *
+   * Each year's take-home is computed by running the full tax model on that
+   * year's pay, not by escalating year one's take-home. Tax is progressive, so a
+   * raise does not lift take-home proportionally — a flat growth rate on the
+   * net figure would quietly overstate every year after a promotion.
+   */
+  function cashFlowRows() {
+    if (!latestResult || latestResult.gross <= 0) return [];
+    var years = window.CashFlowTab
+      ? CashFlow.yearRange(window.CashFlowTab.getState())
+      : [new Date().getFullYear()];
+
+    var proj = paySchedule.projectFor(years);
+    var amounts = {};
+    proj.rows.forEach(function (row) { amounts[row.year] = row.takeHome; });
+
+    return [{
+      id: 'salary_takehome',
+      label: 'Net salary (take-home)',
+      group: 'Income',
+      kind: 'income',
+      cadence: 'annual',
+      startYear: years[0],
+      amounts: amounts
+    }];
+  }
+
+  /** The Savings tab reads the 401(k) figure from here rather than duplicating it. */
+  function getPayrollRetirement() {
+    return latestResult ? latestResult.retirement : 0;
   }
 
   function renderStats(r, per, freq) {
@@ -293,6 +515,20 @@
 
   /* ---------------------------------------------------------------- tabs -- */
 
+  /**
+   * Where to land. A returning visitor gets the summary, since their figures are
+   * already in; a first-timer gets Salary, because an empty summary tells you
+   * nothing and gives you nowhere to start.
+   */
+  function initialTab() {
+    try {
+      // Snapshotted at load: several tabs write defaults during their own init,
+      // so checking storage now would call everyone a returning visitor.
+      if (window.Storage && Storage.hadSavedData()) return 'health';
+    } catch (e) { /* fall through */ }
+    return 'salary';
+  }
+
   function initTabs() {
     var tabs = Array.prototype.slice.call(document.querySelectorAll('.tab'));
     tabs.forEach(function (tab) {
@@ -367,10 +603,32 @@
 
     $('reset').addEventListener('click', function () {
       writeInputs(DEFAULTS);
+      paySchedule.reset();
       render();
     });
 
+    $('pay-raise').addEventListener('input', function () {
+      paySchedule.setRaise((parseFloat(this.value) || 0) / 100);
+      render();
+    });
+
+    $('pay-clear').addEventListener('click', function () {
+      paySchedule.reset();
+      render();
+    });
+
+    selectTab(initialTab());
     $('tax-year').textContent = TaxData.TAX_YEAR;
+
+    // Register before the first render, so the ledger picks up salary immediately.
+    if (window.CashFlowTab) window.CashFlowTab.registerSource('salary', cashFlowRows);
+    // Expose the payroll 401(k) so the Savings tab can mirror it rather than
+    // asking for the same number twice.
+    window.SalaryTab = {
+      getPayrollRetirement: getPayrollRetirement,
+      getPayProjection: function (years) { return paySchedule.projectFor(years); }
+    };
+
     render();
   }
 
