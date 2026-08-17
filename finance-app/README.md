@@ -5,9 +5,9 @@ salary, a bonus, your pre-tax deductions and a state, and it breaks the year
 down into take-home pay, federal tax, state tax and FICA — weekly, bi-weekly,
 semi-monthly, monthly or annually.
 
-Three tabs are built: **Salary**, **Cash flow** and **Savings & investments**.
-Expenses and Life events are stubs that plug into the cash flow ledger when they
-land.
+Four tabs are built: **Salary**, **Expenses**, **Cash flow** and
+**Savings & investments**. Life events is a stub that plugs into the cash flow
+ledger when it lands.
 
 ## Running it
 
@@ -31,9 +31,9 @@ The calculation engine is a pure module with no DOM, so it runs under plain Node
 cd finance-app && npm test
 ```
 
-191 assertions across three suites — 63 for the tax engine, 79 for the cash flow
-ledger, 49 for savings. Expected values are worked out by hand from the published
-2026 tables rather than read back out of the implementation.
+269 assertions across four suites — 63 for the tax engine, 90 for the cash flow
+ledger, 49 for savings, 67 for expenses. Expected values are worked out by hand
+from the published 2026 tables rather than read back out of the implementation.
 
 ## What it models
 
@@ -119,9 +119,11 @@ finance-app/
 │   ├── calc.js         the tax engine — pure, no DOM, testable
 │   ├── cashflow.js     the shared ledger — pure, no DOM, testable
 │   ├── savings.js      accounts and balance projection — pure, testable
+│   ├── expenses.js     recurring expenses, inflation, buffer — pure, testable
 │   ├── charts.js       hand-rolled SVG charts, no chart library
 │   ├── cashflow-ui.js  the cash flow tab: table, editor, charts
 │   ├── savings-ui.js   the savings & investments tab
+│   ├── expenses-ui.js  the expenses tab
 │   └── app.js          salary tab wiring and rendering
 └── test/
     ├── calc.test.js
@@ -226,9 +228,47 @@ Money invested **out of take-home** is a different case and does belong on the
 table — it competes with the rest of your spending. Employer match never does:
 it is money arriving, not leaving.
 
+## Expenses
+
+Every recurring outgoing lives here — this is where you type things in; the Cash
+flow tab reads the result.
+
+### Inflation, per expense with a shared default
+
+Rent and groceries rarely climb at the same rate, so each expense may pin its own
+rate. Leave the box blank and it follows the tab's default, which means changing
+the default moves everything that has not been pinned — the common case.
+
+`null` and `0` are deliberately different: `null` means "follow the default",
+while a typed `0` pins the expense at 0% even when the default is 3%. Collapsing
+those two would make it impossible to say "this one does not inflate".
+
+### The safety buffer
+
+One percentage padding the whole set, for the fact that budgets are optimistic.
+It reaches the cash flow ledger as **its own row**, not folded into each expense,
+so you can always see what the padding costs and take it back off. Silently
+inflating every line would make the numbers untraceable.
+
+The buffer row carries an **explicit amount for every year** rather than a single
+growth rate. It has to: the expenses underneath it grow at different rates and
+start and stop in different years, so a lone growth rate would drift away from
+being a true percentage. It is recomputed against the real total each year.
+
+## Overriding a derived row
+
+The Cash flow tab takes its rows from the other tabs, but any single year can
+still be typed over. That edit is stored as an **override** — kept separately,
+keyed by transaction and year, and re-applied after every rebuild.
+
+The result is that changing rent on the Expenses tab flows through to every year
+*except* the one you pinned by hand. Clearing the cell hands that year back.
+Overridden cells are marked with a rule as well as weight, so the distinction
+survives a greyscale print.
+
 ## Charts
 
-Six, all inline SVG with hover tooltips and keyboard focus:
+Seven, all inline SVG with hover tooltips and keyboard focus:
 
 1. **Where your gross pay goes** — one bar per component, single hue.
 2. **How your federal tax is built** — tax generated inside each bracket, with
@@ -241,6 +281,9 @@ Six, all inline SVG with hover tooltips and keyboard focus:
    alone, both in dollars on one axis, so the gap between them is exactly the
    compounding.
 6. **Projected balance** (Savings) — the same treatment across all accounts.
+7. **What it costs over time** (Expenses) — stacked bars, the buffer as a lighter
+   band of the same hue on top, because it is padding on the bar beneath rather
+   than a different kind of thing.
 
 Colors come from a palette validated for colour-blind separation and contrast in
 both light and dark mode. An earlier draft used a stacked bar for chart 1; it was

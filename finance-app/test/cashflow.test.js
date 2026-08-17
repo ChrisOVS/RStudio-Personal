@@ -239,6 +239,32 @@ var noisy = CF.createRegistry();
 noisy.register('broken', function () { throw new Error('tab not ready'); });
 deep(noisy.rebuild([]), [], 'a provider that throws is skipped rather than breaking the table');
 
+suite('Overrides — hand edits that survive a rebuild');
+
+var derived = CF.normalize({ id: 'expense_rent', label: 'Rent', kind: 'expense',
+  cadence: 'monthly', startYear: 2026, amounts: { 2026: 2000 }, source: 'expenses', locked: true });
+
+var overridden = CF.applyOverrides([derived], { expense_rent: { 2028: 3500 } })[0];
+near(CF.amountForYear(overridden, 2026), 2000, 0.01, 'un-overridden years keep the tab value');
+near(CF.amountForYear(overridden, 2028), 3500, 0.01, 'the overridden year takes the hand-typed value');
+near(CF.amountForYear(overridden, 2029), 3500, 0.01, 'and later years carry it forward');
+eq(CF.isOverridden(overridden, 2028), true, 'the overridden year is flagged');
+eq(CF.isOverridden(overridden, 2026), false, 'others are not');
+near(CF.amountForYear(derived, 2028), 2000, 0.01, 'the original row is not mutated');
+
+// The whole point: the source tab rebuilds its rows, and the edit still holds.
+var rebuiltRow = CF.normalize({ id: 'expense_rent', label: 'Rent', kind: 'expense',
+  cadence: 'monthly', startYear: 2026, amounts: { 2026: 2200 }, source: 'expenses', locked: true });
+var reapplied = CF.applyOverrides([rebuiltRow], { expense_rent: { 2028: 3500 } })[0];
+near(CF.amountForYear(reapplied, 2026), 2200, 0.01, 'the rebuilt row brings the new tab value through');
+near(CF.amountForYear(reapplied, 2028), 3500, 0.01, 'while the override still holds on its own year');
+
+deep(CF.applyOverrides([derived], null)[0].amounts, derived.amounts, 'no overrides is a no-op');
+deep(CF.applyOverrides([derived], { other_id: { 2028: 1 } })[0].amounts, derived.amounts,
+  'an override for a row that is gone is ignored');
+deep(CF.applyOverrides([derived], { expense_rent: {} })[0].amounts, derived.amounts,
+  'an empty override map is a no-op');
+
 /* ------------------------------------------------------------ normalize ---- */
 
 suite('Normalize — defaults and coercion');

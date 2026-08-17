@@ -21,7 +21,7 @@
     <div class="tabs" role="tablist" aria-label="Sections">
       <button class="tab" role="tab" data-tab="salary" aria-selected="true" id="tab-salary">Salary</button>
       <button class="tab" role="tab" data-tab="cashflow" aria-selected="false" id="tab-cashflow">Cash flow</button>
-      <button class="tab" role="tab" data-tab="expenses" aria-selected="false">Expenses <span class="soon">soon</span></button>
+      <button class="tab" role="tab" data-tab="expenses" aria-selected="false" id="tab-expenses">Expenses</button>
       <button class="tab" role="tab" data-tab="lifeevents" aria-selected="false">Life events <span class="soon">soon</span></button>
       <button class="tab" role="tab" data-tab="savings" aria-selected="false" id="tab-savings">Savings &amp; investments</button>
     </div>
@@ -318,33 +318,99 @@
       </div>
     </div>
 
-    <div class="card" style="margin-top:20px">
-      <div class="card-head">
-        <h2>Your transactions</h2>
-        <p>Name, group and cadence for the rows you added. Growth applies a yearly
-           increase to the years you have not set by hand.</p>
-      </div>
-
-      <div class="cf-manage-head">
-        <span>Label</span><span>Group</span><span>Direction</span><span>Cadence</span>
-        <span>From</span><span>Until</span><span>Growth %</span><span></span>
-      </div>
-      <div id="cf-manage-list"></div>
-
-      <div class="cf-add-row">
-        <input type="text" id="cf-add-group" placeholder="Group (e.g. Housing)" aria-label="Group for the new transaction">
-        <button type="button" id="cf-add" class="cf-add-btn">Add transaction</button>
-      </div>
-    </div>
-  </section>
+</section>
 
   <!-- ================================================== PLACEHOLDER TABS -->
-  <section class="tab-panel" data-panel="expenses" role="tabpanel" hidden>
-    <div class="card placeholder">
-      <h2>Expenses</h2>
-      <p>Not built yet. It will write recurring outflow rows into the cash flow table,
-         the same way the Salary tab writes your take-home in — grouped by category,
-         with per-year amounts that carry forward.</p>
+  <section class="tab-panel" data-panel="expenses" role="tabpanel" aria-labelledby="tab-expenses" hidden>
+
+    <div class="card cf-controls">
+      <div class="field">
+        <label for="ex-inflation">Default inflation <span class="hint">% a year</span></label>
+        <input type="number" id="ex-inflation" step="0.1" min="-10" max="30">
+      </div>
+      <div class="field">
+        <label for="ex-buffer">Safety buffer <span class="hint">% on everything</span></label>
+        <input type="number" id="ex-buffer" step="1" min="0" max="100">
+      </div>
+      <div class="field ex-presets">
+        <label>Quick set <span class="hint">buffer</span></label>
+        <div class="ex-preset-row">
+          <button type="button" class="ex-buffer-preset" data-pct="0">None</button>
+          <button type="button" class="ex-buffer-preset" data-pct="10">10%</button>
+          <button type="button" class="ex-buffer-preset" data-pct="20">20%</button>
+          <button type="button" class="ex-buffer-preset" data-pct="30">30%</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Buffer in use</label>
+        <div class="ex-buffer-out" id="ex-buffer-out">0%</div>
+      </div>
+    </div>
+
+    <div class="stats" style="margin-top:20px">
+      <div class="stat">
+        <div class="k">Total a month</div>
+        <div class="v is-hero" id="ex-stat-monthly">&mdash;</div>
+        <div class="sub" id="ex-stat-monthly-sub"></div>
+      </div>
+      <div class="stat">
+        <div class="k">Total a year</div>
+        <div class="v" id="ex-stat-annual">&mdash;</div>
+        <div class="sub" id="ex-stat-annual-sub"></div>
+      </div>
+      <div class="stat">
+        <div class="k">Buffer</div>
+        <div class="v" id="ex-stat-buffer">&mdash;</div>
+        <div class="sub" id="ex-stat-buffer-sub"></div>
+      </div>
+      <div class="stat">
+        <div class="k">Same basket later</div>
+        <div class="v" id="ex-stat-future">&mdash;</div>
+        <div class="sub" id="ex-stat-future-sub"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:20px">
+      <div class="card-head">
+        <h2>Regular expenses</h2>
+        <p>Amounts are per period. Leave the inflation box blank to follow the default
+           above, or type a number to pin that one expense to its own rate.</p>
+      </div>
+
+      <div id="ex-buffer-note" class="note"></div>
+
+      <div class="ex-head">
+        <span>Expense</span><span>Category</span><span>How often</span>
+        <span>Amount</span><span>Inflation</span><span>A year</span><span></span>
+      </div>
+      <div id="ex-list"></div>
+
+      <div class="cf-add-row">
+        <select id="ex-add-category" aria-label="Category for the new expense"></select>
+        <button type="button" id="ex-add" class="cf-add-btn">Add expense</button>
+      </div>
+    </div>
+
+    <div class="chart-grid" style="margin-top:20px">
+      <div class="card">
+        <div class="card-head">
+          <h2>Where the money goes</h2>
+          <p>Annual spending by category, with the buffer shown separately.</p>
+        </div>
+        <div class="chart-scroll"><svg id="chart-expense-categories"></svg></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>What it costs over time</h2>
+          <p>The same basket, inflated year by year. The lighter band on top is the buffer.</p>
+        </div>
+        <div class="chart-scroll"><svg id="chart-expense-growth"></svg></div>
+        <div class="legend">
+          <span><i style="background:var(--series-1)"></i> Expenses</span>
+          <span><i style="background:var(--series-1-soft)"></i> Safety buffer</span>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -415,9 +481,11 @@
 <script src="js/calc.js"></script>
 <script src="js/cashflow.js"></script>
 <script src="js/savings.js"></script>
+<script src="js/expenses.js"></script>
 <script src="js/charts.js"></script>
 <script src="js/cashflow-ui.js"></script>
 <script src="js/savings-ui.js"></script>
+<script src="js/expenses-ui.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

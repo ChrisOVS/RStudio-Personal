@@ -602,3 +602,59 @@ details.table-toggle[open] summary { margin-bottom: 8px; }
 
 /* The add-account picker is a control, not a row — keep it from stretching. */
 #sv-add-type { flex: 0 1 240px; width: auto; }
+
+/* -------------------------------------------------------------- expenses -- */
+
+.ex-head, .ex-row {
+  display: grid;
+  grid-template-columns: 1.7fr 1fr 1fr 1fr 1fr .8fr auto;
+  gap: 8px;
+  align-items: center;
+}
+.ex-head {
+  font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--text-muted); font-weight: 600; padding: 4px 0 8px;
+  border-bottom: 1px solid var(--grid);
+}
+.ex-row { padding: 8px 0; border-bottom: 1px solid var(--grid); }
+.ex-row.is-off { opacity: .5; }
+.ex-row input, .ex-row select { padding: 7px 9px; font-size: 13px; }
+.ex-amount { min-width: 0; }
+.ex-annual {
+  font-size: 13px; text-align: right; color: var(--text-primary);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.ex-annual small { color: var(--text-muted); font-size: 11px; margin-left: 1px; }
+
+/* A blank inflation box means "follow the default", so the tag says which is
+   in force rather than leaving an empty field ambiguous. */
+.ex-infl { position: relative; display: flex; flex-direction: column; gap: 2px; }
+.ex-infl input { width: 100%; }
+.ex-infl-tag { font-size: 10px; color: var(--text-muted); letter-spacing: .02em; }
+
+.ex-preset-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.ex-buffer-preset {
+  border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary);
+  border-radius: 7px; padding: 8px 12px; font: inherit; font-size: 13px; cursor: pointer;
+}
+.ex-buffer-preset:hover { border-color: var(--series-1); color: var(--accent-ink); }
+.ex-buffer-out {
+  font-size: 22px; font-weight: 600; color: var(--series-1); line-height: 1.5;
+}
+
+@media (max-width: 900px) {
+  .ex-head { display: none; }
+  .ex-row { grid-template-columns: 1fr 1fr; }
+}
+
+/* A cell typed over on the Cash flow tab, on a row another tab owns. Marked
+   with a rule rather than colour alone so it survives a greyscale print. */
+.cf-cell.is-overridden { box-shadow: inset 0 -2px 0 var(--series-2); }
+.cf-cell.is-overridden input { color: var(--text-primary); font-weight: 600; }
+
+/* The `.ex-row input` padding above resets the money-prefix inset, so restore it
+   at higher specificity — otherwise the "$" sits on top of the first digit. */
+.ex-row .input-money input { padding-left: 25px; }
+
+/* Category picker is a control, not a row. */
+#ex-add-category { flex: 0 1 240px; width: auto; }

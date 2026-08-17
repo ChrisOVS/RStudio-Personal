@@ -277,6 +277,41 @@
     };
   }
 
+  /**
+   * Lay per-year overrides on top of rows that came from another tab.
+   *
+   * Rows fed in by the Expenses or Salary tab are rebuilt on every refresh, so a
+   * plain edit to one would vanish. An override is stored separately, keyed by
+   * transaction and year, and re-applied after each rebuild — which is what
+   * makes it possible to nudge a single year by hand without unhooking the row
+   * from the tab that owns it.
+   *
+   * `overriddenYears` is set so the table can mark those cells and offer to put
+   * them back.
+   */
+  function applyOverrides(transactions, overrides) {
+    if (!overrides) return transactions;
+    return transactions.map(function (tx) {
+      var forTx = overrides[tx.id];
+      if (!forTx) return tx;
+
+      var years = Object.keys(forTx).filter(function (y) { return isFinite(Number(y)); });
+      if (!years.length) return tx;
+
+      var next = Object.assign({}, tx, { amounts: Object.assign({}, tx.amounts) });
+      next.overriddenYears = {};
+      years.forEach(function (y) {
+        next.amounts[Number(y)] = num(forTx[y]);
+        next.overriddenYears[Number(y)] = true;
+      });
+      return next;
+    });
+  }
+
+  function isOverridden(tx, year) {
+    return !!(tx.overriddenYears && tx.overriddenYears[Number(year)]);
+  }
+
   /* ------------------------------------------------------------------- helpers */
 
   var nextId = 1;
@@ -348,6 +383,8 @@
     createRegistry: createRegistry,
     normalize: normalize,
     setAmount: setAmount,
-    clearAmount: clearAmount
+    clearAmount: clearAmount,
+    applyOverrides: applyOverrides,
+    isOverridden: isOverridden
   };
 });

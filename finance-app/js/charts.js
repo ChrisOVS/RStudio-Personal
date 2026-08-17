@@ -100,13 +100,24 @@
    * stacked bar or donut: separate bars compare the components directly, and a
    * single hue keeps bar length as the only encoding.
    */
-  function renderBreakdown(svg, rows) {
+  function renderBreakdown(svg, rows, emptyMessage) {
     clear(svg);
     var W = 640;
     var rowH = 40;
     var gap = 10;
     var labelW = 132;
     var valueW = 96;
+
+    // With no rows the height arithmetic goes negative, which is an invalid
+    // viewBox and throws. Draw the empty state at a fixed height instead.
+    if (!rows.length) {
+      svg.setAttribute('viewBox', '0 0 ' + W + ' 80');
+      svg.setAttribute('role', 'img');
+      svg.appendChild(el('text', { x: W / 2, y: 44, 'text-anchor': 'middle', class: 'viz-empty' }))
+        .textContent = emptyMessage || 'Nothing to show yet.';
+      return;
+    }
+
     var H = rows.length * (rowH + gap) - gap + 8;
     svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
     svg.setAttribute('role', 'img');
@@ -431,6 +442,76 @@
     svg.appendChild(el('line', { x1: padL, y1: padT + plotH, x2: padL + plotW, y2: padT + plotH, class: 'viz-axis' }));
   }
 
+  /* ------------------------------------------- 6. expenses + buffer by year -- */
+
+  /**
+   * Stacked bars: what the expenses come to, with the safety buffer sitting on
+   * top as a lighter band of the SAME hue. Two steps of one hue rather than two
+   * categorical colours, because the buffer is not a different kind of thing —
+   * it is padding on the bar beneath it, and same-hue reads that way.
+   */
+  function renderExpenseGrowth(svg, years, base, buffer) {
+    clear(svg);
+    var W = Math.max(640, years.length * 42);
+    var H = 240;
+    var padL = 62, padR = 16, padT = 16, padB = 40;
+    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+    svg.setAttribute('role', 'img');
+
+    var plotW = W - padL - padR;
+    var plotH = H - padT - padB;
+    var totals = years.map(function (_, i) { return base[i] + buffer[i]; });
+    var max = Math.max.apply(null, totals.concat([1]));
+    var step = niceStep(max);
+    var top = Math.ceil(max / step) * step || step;
+
+    function sy(v) { return padT + plotH - (v / top) * plotH; }
+
+    for (var g = 0; g <= top + 1e-6; g += step) {
+      var gy = sy(g);
+      svg.appendChild(el('line', { x1: padL, y1: gy, x2: padL + plotW, y2: gy, class: 'viz-grid' }));
+      svg.appendChild(el('text', { x: padL - 10, y: gy, 'text-anchor': 'end', 'dominant-baseline': 'middle', class: 'viz-tick' }))
+        .textContent = moneyShort(g);
+    }
+
+    var slotW = plotW / years.length;
+    var barW = Math.min(30, slotW - 8);
+    var GAP = 2;   // surface gap between stacked segments, never a border
+
+    years.forEach(function (year, i) {
+      var cx = padL + slotW * i + slotW / 2;
+      var baseTop = sy(base[i]);
+      var baseH = Math.max(0, padT + plotH - baseTop);
+
+      svg.appendChild(el('rect', {
+        x: cx - barW / 2, y: baseTop, width: barW, height: baseH, rx: 4, class: 'viz-bar is-primary'
+      }));
+
+      if (buffer[i] > 0) {
+        var bufTop = sy(base[i] + buffer[i]);
+        var bufH = Math.max(0, baseTop - bufTop - GAP);
+        svg.appendChild(el('rect', {
+          x: cx - barW / 2, y: bufTop, width: barW, height: bufH, rx: 4, class: 'viz-bar'
+        }));
+      }
+
+      if (i === 0 || i === years.length - 1 || i % 5 === 0) {
+        svg.appendChild(el('text', { x: cx, y: padT + plotH + 18, 'text-anchor': 'middle', class: 'viz-tick' }))
+          .textContent = year;
+      }
+
+      attachHover(svg, { x: cx - slotW / 2, y: padT, width: slotW, height: plotH },
+        '<strong>' + year + '</strong><br>' +
+        'Expenses ' + money(base[i]) +
+        (buffer[i] > 0 ? '<br>Buffer ' + money(buffer[i]) + '<br><strong>Total ' + money(totals[i]) + '</strong>' : '') +
+        '<br><span class="viz-tooltip-dim">' + money(totals[i] / 12) + ' a month</span>');
+    });
+
+    svg.appendChild(el('line', {
+      x1: padL, y1: padT + plotH, x2: padL + plotW, y2: padT + plotH, class: 'viz-axis'
+    }));
+  }
+
   function niceStep(max) {
     if (max <= 0) return 1;
     var raw = max / 4;
@@ -445,6 +526,7 @@
     renderBrackets: renderBrackets,
     renderRateCurve: renderRateCurve,
     renderNetFlow: renderNetFlow,
+    renderExpenseGrowth: renderExpenseGrowth,
     renderBalance: renderBalance,
     money: money,
     moneyShort: moneyShort,

@@ -22,22 +22,11 @@
     horizonYears: 20,
     openingBalance: 0,
     annualReturn: 0.06,
-    transactions: []
+    transactions: [],
+    // Hand edits to rows owned by another tab, keyed by transaction then year.
+    // Kept apart from the rows themselves so they survive every rebuild.
+    overrides: {}
   };
-
-  // Enough of a starting ledger that the table is legible on first open.
-  function seedTransactions() {
-    var y = state.startYear;
-    return [
-      { label: 'Rent / mortgage', group: 'Housing', kind: 'expense', cadence: 'monthly', startYear: y, amounts: {} },
-      { label: 'Utilities', group: 'Housing', kind: 'expense', cadence: 'monthly', startYear: y, amounts: {} },
-      { label: 'Groceries', group: 'Living', kind: 'expense', cadence: 'monthly', startYear: y, amounts: {} },
-      { label: 'Transport', group: 'Living', kind: 'expense', cadence: 'monthly', startYear: y, amounts: {} }
-    ].map(function (t) {
-      t.amounts[y] = 0;
-      return CashFlow.normalize(t);
-    });
-  }
 
   /* ----------------------------------------------------------- persistence -- */
 
@@ -49,8 +38,10 @@
         openingBalance: state.openingBalance,
         annualReturn: state.annualReturn,
         // Only manual rows are stored. Derived rows are rebuilt from their tab,
-        // so persisting them would resurrect stale copies.
-        transactions: state.transactions.filter(function (t) { return t.source === 'manual'; })
+        // so persisting them would resurrect stale copies. Overrides are stored
+        // because they are edits the user made here and nowhere else.
+        transactions: state.transactions.filter(function (t) { return t.source === 'manual'; }),
+        overrides: state.overrides
       }));
     } catch (e) { /* private mode */ }
   }
@@ -65,15 +56,23 @@
       state.openingBalance = saved.openingBalance || 0;
       state.annualReturn = saved.annualReturn == null ? 0.06 : saved.annualReturn;
       state.transactions = (saved.transactions || []).map(CashFlow.normalize);
+      state.overrides = saved.overrides || {};
       return true;
     } catch (e) { return false; }
   }
 
   /* --------------------------------------------------------------- rebuild -- */
 
-  /** Re-pull every registered source, then redraw. Call after any change. */
+  /**
+   * Re-pull every registered source, then lay any hand edits back on top and
+   * redraw. Overrides are re-applied AFTER the rebuild, which is what lets a
+   * typed-in year survive the owning tab regenerating its rows.
+   */
   function refresh() {
-    state.transactions = registry.rebuild(state.transactions);
+    state.transactions = CashFlow.applyOverrides(
+      registry.rebuild(state.transactions),
+      state.overrides
+    );
     save();
     render();
   }
@@ -87,7 +86,6 @@
     renderTable(p);
     Charts.renderNetFlow($('chart-netflow'), p.years, p.net);
     Charts.renderBalance($('chart-balance'), p.years, p.balance, p.cumulativeNet);
-    renderManageList();
     renderSourceNote();
   }
 
@@ -212,33 +210,47 @@
       var td = document.createElement('td');
       var active = CashFlow.isActiveIn(tx, year);
       var explicit = CashFlow.isExplicit(tx, year);
+      var overridden = CashFlow.isOverridden(tx, year);
 
       if (!active) {
         td.className = 'cf-cell is-inactive';
         td.textContent = '—';
-      } else if (tx.locked) {
-        td.className = 'cf-cell is-locked';
-        td.textContent = moneyShort(CashFlow.amountForYear(tx, year));
-      } else {
-        td.className = 'cf-cell' + (explicit ? ' is-explicit' : ' is-inherited');
-        var input = document.createElement('input');
-        input.type = 'text';
-        input.inputMode = 'decimal';
-        input.value = formatCell(CashFlow.amountForYear(tx, year));
-        input.title = explicit
-          ? 'Set for ' + year
-          : 'Inherited from an earlier year. Type here to change it from ' + year + ' on.';
-        input.setAttribute('aria-label', tx.label + ', ' + year);
-        input.addEventListener('change', function () {
-          applyCellEdit(tx.id, year, input.value);
-        });
-        input.addEventListener('keydown', function (e) {
-          if (e.key === 'Enter') input.blur();
-          // Backspace on an empty inherited-value cell clears the override.
-          if (e.key === 'Escape') { input.value = formatCell(CashFlow.amountForYear(tx, year)); input.blur(); }
-        });
-        td.appendChild(input);
+        tr.appendChild(td);
+        return;
       }
+
+      // Every cell is editable, including rows owned by another tab. Editing one
+      // of those writes an override rather than changing the row, so the row
+      // keeps tracking its tab everywhere else.
+      td.className = 'cf-cell'
+        + (overridden ? ' is-overridden' : explicit ? ' is-explicit' : ' is-inherited');
+
+      var input = document.createElement('input');
+      input.type = 'text';
+      input.inputMode = 'decimal';
+      input.value = formatCell(CashFlow.amountForYear(tx, year));
+      input.setAttribute('aria-label', tx.label + ', ' + year);
+      input.title = overridden
+        ? 'Overridden by hand. Clear the cell to hand it back to the '
+          + (CashFlow.SOURCES[tx.source] || 'source tab') + '.'
+        : tx.locked
+          ? 'From the ' + (CashFlow.SOURCES[tx.source] || 'source tab')
+            + '. Type here to override just this year onward.'
+          : explicit
+            ? 'Set for ' + year
+            : 'Inherited from an earlier year. Type here to change it from ' + year + ' on.';
+
+      input.addEventListener('change', function () {
+        applyCellEdit(tx, year, input.value);
+      });
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') input.blur();
+        if (e.key === 'Escape') {
+          input.value = formatCell(CashFlow.amountForYear(tx, year));
+          input.blur();
+        }
+      });
+      td.appendChild(input);
       tr.appendChild(td);
     });
 
@@ -254,78 +266,33 @@
     return { salary: 'Salary', expenses: 'Expenses', lifeEvent: 'Life event', savings: 'Savings' }[source] || source;
   }
 
-  function applyCellEdit(txId, year, raw) {
-    var idx = state.transactions.findIndex(function (t) { return t.id === txId; });
-    if (idx < 0) return;
-    var tx = state.transactions[idx];
-
+  /**
+   * A cell edit takes one of two paths.
+   *
+   * On a row this tab owns, it writes the amount directly. On a row fed in by
+   * another tab, it writes an OVERRIDE — stored separately and re-applied after
+   * every rebuild — so the edit sticks without detaching the row from its tab.
+   * Clearing the cell hands that year back.
+   */
+  function applyCellEdit(tx, year, raw) {
     var trimmed = String(raw).trim();
+
+    if (tx.locked) {
+      if (!state.overrides[tx.id]) state.overrides[tx.id] = {};
+      if (trimmed === '') delete state.overrides[tx.id][year];
+      else state.overrides[tx.id][year] = parseFloat(trimmed.replace(/[$,\s]/g, '')) || 0;
+      if (!Object.keys(state.overrides[tx.id]).length) delete state.overrides[tx.id];
+      refresh();
+      return;
+    }
+
+    var idx = state.transactions.findIndex(function (t) { return t.id === tx.id; });
+    if (idx < 0) return;
     if (trimmed === '' && CashFlow.isExplicit(tx, year)) {
-      // Emptying a cell you had set reverts it to inheriting.
       state.transactions[idx] = CashFlow.clearAmount(tx, year);
     } else {
       state.transactions[idx] = CashFlow.setAmount(tx, year, trimmed === '' ? 0 : trimmed);
     }
-    save();
-    render();
-  }
-
-  /* ------------------------------------------------------------ manage list -- */
-
-  function renderManageList() {
-    var host = $('cf-manage-list');
-    host.innerHTML = '';
-    var manual = state.transactions.filter(function (t) { return t.source === 'manual'; });
-
-    if (!manual.length) {
-      host.innerHTML = '<p class="cf-empty">No transactions of your own yet.</p>';
-      return;
-    }
-
-    manual.forEach(function (tx) {
-      var row = document.createElement('div');
-      row.className = 'cf-manage-row';
-      row.innerHTML =
-        '<input type="text" value="' + escapeAttr(tx.label) + '" data-f="label" aria-label="Label">' +
-        '<input type="text" value="' + escapeAttr(tx.group) + '" data-f="group" aria-label="Group">' +
-        '<select data-f="kind" aria-label="Direction">' +
-          '<option value="expense"' + (tx.kind === 'expense' ? ' selected' : '') + '>Money out</option>' +
-          '<option value="income"' + (tx.kind === 'income' ? ' selected' : '') + '>Money in</option>' +
-        '</select>' +
-        '<select data-f="cadence" aria-label="Cadence">' +
-          Object.keys(CashFlow.CADENCES).map(function (c) {
-            return '<option value="' + c + '"' + (tx.cadence === c ? ' selected' : '') + '>'
-              + CashFlow.CADENCES[c].label + '</option>';
-          }).join('') +
-        '</select>' +
-        '<input type="number" value="' + (tx.startYear == null ? '' : tx.startYear) + '" data-f="startYear" placeholder="From" aria-label="Start year">' +
-        '<input type="number" value="' + (tx.endYear == null ? '' : tx.endYear) + '" data-f="endYear" placeholder="Until" aria-label="End year">' +
-        '<input type="number" value="' + (tx.growth * 100).toFixed(1).replace(/\.0$/, '') + '" data-f="growth" step="0.5" aria-label="Yearly growth percent" title="Yearly % increase applied between the years you set">' +
-        '<button type="button" class="cf-del" aria-label="Remove ' + escapeAttr(tx.label) + '">Remove</button>';
-
-      row.querySelectorAll('[data-f]').forEach(function (field) {
-        field.addEventListener('change', function () {
-          updateTransaction(tx.id, field.dataset.f, field.value);
-        });
-      });
-      row.querySelector('.cf-del').addEventListener('click', function () {
-        state.transactions = state.transactions.filter(function (t) { return t.id !== tx.id; });
-        save();
-        render();
-      });
-
-      host.appendChild(row);
-    });
-  }
-
-  function updateTransaction(id, field, value) {
-    var idx = state.transactions.findIndex(function (t) { return t.id === id; });
-    if (idx < 0) return;
-    var next = Object.assign({}, state.transactions[idx]);
-    if (field === 'growth') next.growth = (parseFloat(value) || 0) / 100;
-    else if (field === 'startYear' || field === 'endYear') next[field] = value === '' ? null : parseInt(value, 10);
-    else next[field] = value;
-    state.transactions[idx] = CashFlow.normalize(next);
     save();
     render();
   }
@@ -339,11 +306,20 @@
     var listed = Object.keys(counts).map(function (s) {
       return counts[s] + ' from the ' + (CashFlow.SOURCES[s] || s);
     });
+    var overrideCount = Object.keys(state.overrides).reduce(function (a, id) {
+      return a + Object.keys(state.overrides[id] || {}).length;
+    }, 0);
+
     $('cf-source-note').innerHTML = listed.length
-      ? '<strong>Fed from other tabs.</strong> ' + listed.join(', ')
-        + '. Those rows update themselves and cannot be edited here — change them on their own tab.'
-      : '<strong>Nothing feeding in yet.</strong> Fill in the Salary tab and your take-home pay will '
-        + 'appear here as an income row automatically.';
+      ? '<strong>Fed from your other tabs.</strong> ' + listed.join(', ')
+        + '. They keep themselves in step, so change the underlying figures there. '
+        + 'You can still type over any single year here — that becomes an override and sticks. '
+        + (overrideCount
+            ? '<strong>' + overrideCount + ' cell' + (overrideCount === 1 ? '' : 's')
+              + ' overridden</strong> — clear a cell to hand the year back.'
+            : '')
+      : '<strong>Nothing feeding in yet.</strong> Fill in the Salary and Expenses tabs and '
+        + 'their rows will appear here automatically.';
   }
 
   /* ------------------------------------------------------------------ utils -- */
@@ -363,14 +339,16 @@
   /* ------------------------------------------------------------------- init -- */
 
   function init() {
-    if (!load()) state.transactions = seedTransactions();
+    load();
 
     $('cf-start').addEventListener('change', function () {
       state.startYear = parseInt(this.value, 10) || new Date().getFullYear();
+      notifyHorizon();
       refresh();
     });
     $('cf-horizon').addEventListener('change', function () {
       state.horizonYears = parseInt(this.value, 10) || 20;
+      notifyHorizon();
       refresh();
     });
     $('cf-opening').addEventListener('input', function () {
@@ -384,23 +362,13 @@
       render();
     });
 
-    $('cf-add').addEventListener('click', function () {
-      state.transactions.push(CashFlow.normalize({
-        label: 'New transaction',
-        group: $('cf-add-group').value.trim() || 'Ungrouped',
-        kind: 'expense',
-        cadence: 'monthly',
-        startYear: state.startYear,
-        amounts: (function () { var a = {}; a[state.startYear] = 0; return a; })()
-      }));
-      save();
-      render();
-      // Put the cursor in the new row's label so it can be named immediately.
-      var rows = $('cf-manage-list').querySelectorAll('.cf-manage-row input[data-f="label"]');
-      if (rows.length) { rows[rows.length - 1].focus(); rows[rows.length - 1].select(); }
-    });
-
     refresh();
+  }
+
+  /** The horizon is set here but shapes the other tabs' projections too. */
+  function notifyHorizon() {
+    if (window.ExpensesTab) window.ExpensesTab.onHorizonChange();
+    if (window.SavingsTab) window.SavingsTab.onSalaryChange();
   }
 
   // Exposed so other tabs can plug in without reaching into this module.
