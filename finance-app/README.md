@@ -128,7 +128,8 @@ finance-app/
 └── test/
     ├── calc.test.js
     ├── cashflow.test.js
-    └── savings.test.js
+    ├── savings.test.js
+    └── expenses.test.js
 ```
 
 `tax-data.js` and `calc.js` export via UMD so the browser and the test suite run
