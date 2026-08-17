@@ -164,6 +164,25 @@ near(p.cumulativeNet[0], 46000, 0.01, 'cumulative starts from the opening balanc
 near(p.cumulativeNet[4], 10000 + 36000 * 5, 0.01, 'and adds each year');
 near(p.balance[4], p.cumulativeNet[4], 0.01, 'with a 0% return, balance equals cumulative net');
 
+suite('Savings added back — cash left over vs better off');
+
+var withSavings = CF.project(Object.assign({}, state, {
+  savingsAddBack: [12000, 12000, 12000, 12000, 12000]
+}));
+near(withSavings.net[0], 36000, 0.01, 'net is still cash left over after everything');
+near(withSavings.netWithSavings[0], 48000, 0.01, 'adding savings back shows how much better off you are');
+near(withSavings.savingsAddBack[0], 12000, 0.01, 'the add-back is reported on its own');
+deep(withSavings.net, p.net, 'the add-back never changes the cash net');
+near(withSavings.balance[4], p.balance[4], 0.01,
+  'nor the cash balance — savings balances live on the savings tab, not here');
+
+var noAddBack = CF.project(state);
+deep(noAddBack.savingsAddBack, [0, 0, 0, 0, 0], 'with nothing supplied the add-back is zero');
+deep(noAddBack.netWithSavings, noAddBack.net, 'so the two nets agree');
+
+var shortAddBack = CF.project(Object.assign({}, state, { savingsAddBack: [5000] }));
+near(shortAddBack.savingsAddBack[3], 0, 0.01, 'a short add-back array pads with zero rather than NaN');
+
 suite('Investment growth — what the savings tab reads');
 
 var invested = CF.project(Object.assign({}, state, { annualReturn: 0.06 }));

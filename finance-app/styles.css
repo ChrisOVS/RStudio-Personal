@@ -658,3 +658,69 @@ details.table-toggle[open] summary { margin-bottom: 8px; }
 
 /* Category picker is a control, not a row. */
 #ex-add-category { flex: 0 1 240px; width: auto; }
+
+/* ----------------------------------------------------------- life events -- */
+
+.le-head, .le-row {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 1fr .7fr 1fr .6fr .9fr 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+.le-head {
+  font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--text-muted); font-weight: 600; padding: 4px 0 8px;
+  border-bottom: 1px solid var(--grid);
+}
+.le-row { padding: 8px 0; border-bottom: 1px solid var(--grid); }
+.le-row input, .le-row select { padding: 7px 9px; font-size: 13px; }
+.le-row.is-outside { opacity: .62; }
+.le-amount { min-width: 0; }
+.le-row .input-money input { padding-left: 25px; }
+
+.le-infl-toggle { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-secondary); cursor: pointer; }
+.le-infl-toggle input { width: auto; padding: 0; }
+
+.le-cost {
+  font-size: 13px; text-align: right; color: var(--text-primary);
+  font-variant-numeric: tabular-nums; display: flex; flex-direction: column; align-items: flex-end;
+}
+.le-cost small { color: var(--text-muted); font-size: 10.5px; }
+
+.le-warn {
+  grid-column: 1 / -1; font-size: 12px; color: var(--text-secondary);
+  border-left: 3px solid var(--warn); padding: 4px 10px; margin-top: 4px;
+  background: var(--surface-sunken); border-radius: 0 6px 6px 0;
+}
+
+#le-add-category { flex: 0 1 240px; width: auto; }
+
+@media (max-width: 980px) {
+  .le-head { display: none; }
+  .le-row { grid-template-columns: 1fr 1fr; }
+}
+
+/* ---------------------------------------------------------- pay schedule -- */
+
+.pay-controls { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.pay-controls .field { margin-bottom: 0; width: 170px; }
+
+.pay-table td, .pay-table th { white-space: nowrap; }
+.pay-table tr.is-base td { background: var(--surface-sunken); font-weight: 600; }
+.pay-derived { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.pay-cell { padding: 0; }
+.pay-cell input {
+  width: 100%; min-width: 96px; border: 0; background: transparent;
+  padding: 8px 10px; text-align: right; font: inherit; font-size: 13.5px;
+  font-variant-numeric: tabular-nums; color: var(--text-muted);
+}
+/* A pinned year is a claim you made; a projected one is the model guessing. */
+.pay-cell.is-pinned input { color: var(--text-primary); font-weight: 600; }
+.pay-cell.is-pinned { box-shadow: inset 0 -2px 0 var(--series-1); }
+.pay-cell input:hover { background: var(--surface-sunken); }
+.pay-cell input:focus { background: var(--surface-sunken); outline: 2px solid var(--series-1); outline-offset: -2px; }
+
+/* The add-back pair on the cash flow table. */
+.cf-total.is-addback td { color: var(--text-secondary); font-weight: 500; }
+.cf-total.is-networth td { color: var(--text-primary); background: var(--surface-sunken); }
+.cf-total.is-networth .cf-sticky { background: var(--surface-sunken); }

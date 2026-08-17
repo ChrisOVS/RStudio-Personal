@@ -119,11 +119,24 @@
     var totalBalance = sum(function (p, i) { return p.balances[i]; });
     var totalContributed = sum(function (p, i) { return p.contributions[i]; });
 
+    // Per-year, not cumulative: what the cash flow tab adds back so its bottom
+    // line can show money retained rather than only money left liquid. The
+    // employer match is tracked separately and deliberately NOT added back —
+    // it is not your money passing through your hands.
+    var contributionsByYear = years.map(function (_, i) {
+      return list.reduce(function (a, acc) { return a + contributionForYear(acc, i); }, 0);
+    });
+    var matchByYear = years.map(function (_, i) {
+      return list.reduce(function (a, acc) { return a + matchForYear(acc, i); }, 0);
+    });
+
     return {
       years: years,
       perAccount: perAccount,
       totalBalance: totalBalance,
       totalContributed: totalContributed,
+      contributionsByYear: contributionsByYear,
+      matchByYear: matchByYear,
       totalGrowth: years.map(function (_, i) { return totalBalance[i] - totalContributed[i]; }),
       startingBalance: list.reduce(function (a, x) { return a + x.startingBalance; }, 0),
       annualContributions: list.reduce(function (a, x) { return a + x.annualContribution; }, 0),

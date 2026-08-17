@@ -351,13 +351,18 @@
     years.forEach(function (year, i) {
       var v = net[i];
       var cx = padL + slotW * i + slotW / 2;
-      var y = v >= 0 ? sy(v) : zeroY;
-      var h = Math.max(2, Math.abs(sy(v) - zeroY));
 
-      svg.appendChild(el('rect', {
-        x: cx - barW / 2, y: y, width: barW, height: h, rx: 4,
-        class: 'viz-bar ' + (v >= 0 ? 'is-surplus' : 'is-deficit')
-      }));
+      // A genuinely zero year gets no bar. The 2px minimum that keeps small
+      // values visible would otherwise draw a sliver on every empty year, and
+      // a sliver reads as "a little bit", not "nothing".
+      if (v !== 0) {
+        var y = v > 0 ? sy(v) : zeroY;
+        var h = Math.max(2, Math.abs(sy(v) - zeroY));
+        svg.appendChild(el('rect', {
+          x: cx - barW / 2, y: y, width: barW, height: h, rx: 4,
+          class: 'viz-bar ' + (v > 0 ? 'is-surplus' : 'is-deficit')
+        }));
+      }
 
       // Label every few years only — a number on every bar is unreadable.
       if (i === 0 || i === years.length - 1 || i % 5 === 0) {

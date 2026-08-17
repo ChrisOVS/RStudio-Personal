@@ -7,6 +7,8 @@
 
 var Savings = require('../js/savings.js');
 
+function deep(a, e, l) { report(JSON.stringify(a) === JSON.stringify(e), l, JSON.stringify(e), JSON.stringify(a)); }
+
 var passed = 0, failed = 0;
 function suite(n) { console.log('\n' + n); }
 function near(a, e, tol, l) { report(Math.abs(a - e) <= (tol === undefined ? 0.01 : tol), l, e, a); }
@@ -141,6 +143,29 @@ near(many.totalGrowth[4], many.totalBalance[4] - many.totalContributed[4], 0.01,
 ok(many.totalGrowth[4] > 0, 'and is positive with positive returns');
 
 /* ------------------------------------------------------------- edge cases --- */
+
+suite('Per-year contributions — what the cash flow tab adds back');
+
+var perYear = Savings.project([
+  { type: 'retirement401k', annualContribution: 12000, employerMatch: 5000 },
+  { type: 'ira', annualContribution: 7000 }
+], YEARS);
+near(perYear.contributionsByYear[0], 19000, 0.01, 'your own contributions across all accounts');
+near(perYear.contributionsByYear[4], 19000, 0.01, 'flat with no contribution growth');
+// The match is real money but never passed through your hands, so adding it to
+// a cash flow line would misstate what you retained.
+near(perYear.matchByYear[0], 5000, 0.01, 'the employer match is tracked separately');
+ok(perYear.contributionsByYear[0] !== perYear.contributionsByYear[0] + perYear.matchByYear[0],
+  'and is not folded into the add-back');
+
+var growing = Savings.project([
+  { type: 'ira', annualContribution: 1000, contributionGrowth: 0.10 }
+], YEARS);
+near(growing.contributionsByYear[0], 1000, 0.01, 'year one');
+near(growing.contributionsByYear[2], 1210, 0.01, 'and it follows contribution growth');
+
+deep(Savings.project([], YEARS).contributionsByYear, [0, 0, 0, 0, 0],
+  'no accounts gives zeroes, not NaN');
 
 suite('Edge cases');
 

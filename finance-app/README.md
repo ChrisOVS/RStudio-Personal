@@ -5,9 +5,9 @@ salary, a bonus, your pre-tax deductions and a state, and it breaks the year
 down into take-home pay, federal tax, state tax and FICA — weekly, bi-weekly,
 semi-monthly, monthly or annually.
 
-Four tabs are built: **Salary**, **Expenses**, **Cash flow** and
-**Savings & investments**. Life events is a stub that plugs into the cash flow
-ledger when it lands.
+All five tabs are built: **Salary**, **Expenses**, **Life events**, **Cash flow**
+and **Savings & investments**. The first three feed the cash flow ledger; the
+last reads from it.
 
 ## Running it
 
@@ -31,9 +31,10 @@ The calculation engine is a pure module with no DOM, so it runs under plain Node
 cd finance-app && npm test
 ```
 
-269 assertions across four suites — 63 for the tax engine, 90 for the cash flow
-ledger, 49 for savings, 67 for expenses. Expected values are worked out by hand
-from the published 2026 tables rather than read back out of the implementation.
+367 assertions across five suites — 63 for the tax engine, 98 for the cash flow
+ledger, 56 for savings, 67 for expenses, 83 for life events and the pay schedule.
+Expected values are worked out by hand from the published 2026 tables rather than
+read back out of the implementation.
 
 ## What it models
 
@@ -120,16 +121,20 @@ finance-app/
 │   ├── cashflow.js     the shared ledger — pure, no DOM, testable
 │   ├── savings.js      accounts and balance projection — pure, testable
 │   ├── expenses.js     recurring expenses, inflation, buffer — pure, testable
+│   ├── life-events.js  one-off lumpy money — pure, testable
+│   ├── pay-schedule.js expected pay by year — pure, testable
 │   ├── charts.js       hand-rolled SVG charts, no chart library
 │   ├── cashflow-ui.js  the cash flow tab: table, editor, charts
 │   ├── savings-ui.js   the savings & investments tab
 │   ├── expenses-ui.js  the expenses tab
+│   ├── life-events-ui.js  the life events tab
 │   └── app.js          salary tab wiring and rendering
 └── test/
     ├── calc.test.js
     ├── cashflow.test.js
     ├── savings.test.js
-    └── expenses.test.js
+    ├── expenses.test.js
+    └── life-events.test.js
 ```
 
 `tax-data.js` and `calc.js` export via UMD so the browser and the test suite run
@@ -267,9 +272,56 @@ The result is that changing rent on the Expenses tab flows through to every year
 Overridden cells are marked with a rule as well as weight, so the distinction
 survives a greyscale print.
 
+## Life events
+
+The lumpy stuff that lands in one year: a wedding, a car, a house deposit, an
+inheritance. Same idea as Expenses, but each row belongs to a year rather than
+recurring.
+
+**Today's money vs then's money.** Tick *Inflate* and the amount is treated as
+today's money and compounded to the year it lands in — a $100k deposit five years
+out is budgeted at what you will actually have to find, and the uplift is
+reported so the assumption stays visible.
+
+**Spreading.** `spreadYears` repeats the amount for a run of years (three years of
+tuition). One year becomes a `once` ledger row; more becomes an annual row
+bounded by an end year.
+
+## Pay growth
+
+The Salary tab holds what you earn *today*. The pay table projects it forward:
+every year grows at a default raise, and you can type a salary or bonus into any
+year to pin it — a promotion, a jump, a step down. The raise then re-anchors and
+carries on from the pinned figure.
+
+Salary and bonus pin independently, since a promotion usually moves the bonus
+target by a different amount than the base.
+
+Each year's take-home is computed by running **the full tax model on that year's
+pay**, not by escalating year one's take-home. Tax is progressive, so a raise does
+not lift take-home proportionally — a flat growth rate on the net figure would
+overstate every year after a promotion. Every year is taxed with 2026 rules, since
+later brackets are not published; real brackets index with inflation, so tax in
+later years is slightly overstated.
+
+## Cash left over vs better off
+
+The cash flow table ends with two different bottom lines, because they answer
+different questions:
+
+- **Net cash for the year** — what is left liquid after everything, including
+  money moved into savings.
+- **Net including savings** — the same figure with your contributions added back.
+  Money moved into an investment account is not spent; it is still yours. This is
+  the "how much better off am I" number.
+
+Employer match is deliberately excluded from the add-back: it builds your balance
+on the Savings tab but never passed through your hands, so counting it as retained
+cash would misstate what you kept.
+
 ## Charts
 
-Seven, all inline SVG with hover tooltips and keyboard focus:
+Eight, all inline SVG with hover tooltips and keyboard focus:
 
 1. **Where your gross pay goes** — one bar per component, single hue.
 2. **How your federal tax is built** — tax generated inside each bracket, with
@@ -285,6 +337,8 @@ Seven, all inline SVG with hover tooltips and keyboard focus:
 7. **What it costs over time** (Expenses) — stacked bars, the buffer as a lighter
    band of the same hue on top, because it is padding on the bar beneath rather
    than a different kind of thing.
+8. **When they land** (Life events) — diverging bars off a zero baseline, so the
+   year that breaks a plan is the one that stands out.
 
 Colors come from a palette validated for colour-blind separation and contrast in
 both light and dark mode. An earlier draft used a stacked bar for chart 1; it was

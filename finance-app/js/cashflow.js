@@ -197,6 +197,16 @@
     });
     var net = years.map(function (_, i) { return income[i] + expenses[i]; });
 
+    // Money moved into savings and investments is NOT spent — it is still yours,
+    // just no longer liquid. `net` answers "how much cash is left over"; adding
+    // the contributions back answers "how much better off am I this year", which
+    // is the number that actually reflects progress. The caller supplies the
+    // per-year figures because the Savings tab owns them, and payroll
+    // contributions never passed through this table at all.
+    var addBack = state.savingsAddBack || [];
+    var savingsAddBack = years.map(function (_, i) { return num(addBack[i]); });
+    var netWithSavings = net.map(function (v, i) { return v + savingsAddBack[i]; });
+
     var openingBalance = num(state.openingBalance);
     var cumulativeNet = [];
     var balance = [];
@@ -221,6 +231,8 @@
       income: income,
       expenses: expenses,
       net: net,
+      savingsAddBack: savingsAddBack,
+      netWithSavings: netWithSavings,
       cumulativeNet: cumulativeNet,
       balance: balance,
       growthEarned: growthEarned,

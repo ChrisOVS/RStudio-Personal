@@ -80,6 +80,10 @@
   /* ---------------------------------------------------------------- render -- */
 
   function render() {
+    // Savings contributions are money retained, not spent, so the table can show
+    // a bottom line that counts them. Pulled fresh each render because the
+    // Savings tab owns the figures.
+    state.savingsAddBack = savingsAddBack();
     var p = CashFlow.project(state);
     renderControls();
     renderStats(p);
@@ -87,6 +91,14 @@
     Charts.renderNetFlow($('chart-netflow'), p.years, p.net);
     Charts.renderBalance($('chart-balance'), p.years, p.balance, p.cumulativeNet);
     renderSourceNote();
+  }
+
+  /** Your own contributions per year, from the Savings tab. Excludes employer match. */
+  function savingsAddBack() {
+    if (!window.SavingsTab) return [];
+    try {
+      return window.SavingsTab.getProjection().contributionsByYear || [];
+    } catch (e) { return []; }
   }
 
   function renderControls() {
@@ -107,8 +119,13 @@
       ? 'left over in ' + p.years[i]
       : 'short in ' + p.years[i];
 
+    $('cf-stat-withsavings').textContent = money(p.netWithSavings[i]);
+    $('cf-stat-withsavings-sub').textContent = p.savingsAddBack[i] > 0
+      ? 'cash plus ' + money(p.savingsAddBack[i]) + ' into savings'
+      : 'nothing going into savings yet';
+
     $('cf-stat-balance').textContent = money(p.balance[p.balance.length - 1]);
-    $('cf-stat-balance-sub').textContent = 'projected by ' + p.years[p.years.length - 1];
+    $('cf-stat-balance-sub').textContent = 'cash by ' + p.years[p.years.length - 1];
 
     var growth = p.balance[p.balance.length - 1] - p.cumulativeNet[p.cumulativeNet.length - 1];
     $('cf-stat-growth').textContent = money(growth);
@@ -131,6 +148,9 @@
   function renderTable(p) {
     var thead = $('cf-thead');
     var tbody = $('cf-tbody');
+    // Same reason as the pay table: rebuilding drops the caret out of the cell
+    // being edited, and the next keystrokes land on whatever had focus before.
+    var focused = activeCellId(tbody);
     thead.innerHTML = '';
     tbody.innerHTML = '';
 
@@ -167,8 +187,35 @@
     tfoot.innerHTML = '';
     tfoot.appendChild(totalRow('Money in', p.years, p.income, '', false));
     tfoot.appendChild(totalRow('Money out', p.years, p.expenses, '', false));
-    tfoot.appendChild(totalRow('Net for the year', p.years, p.net, 'is-total', true));
-    tfoot.appendChild(totalRow('Balance', p.years, p.balance, 'is-balance', true));
+    tfoot.appendChild(totalRow('Net cash for the year', p.years, p.net, 'is-total', true));
+
+    // The point of these two: `net` is cash left liquid, which counts money moved
+    // into savings as though it were gone. It is not — adding it back gives the
+    // "how much better off am I" figure.
+    var hasSavings = p.savingsAddBack.some(function (v) { return v > 0; });
+    if (hasSavings) {
+      tfoot.appendChild(totalRow('Plus savings & investments', p.years, p.savingsAddBack, 'is-addback', false));
+      tfoot.appendChild(totalRow('Net including savings', p.years, p.netWithSavings, 'is-total is-networth', true));
+    }
+
+    tfoot.appendChild(totalRow('Cash balance', p.years, p.balance, 'is-balance', true));
+
+    restoreCellFocus(tbody, focused);
+  }
+
+  function activeCellId(container) {
+    var el = document.activeElement;
+    if (!el || !container.contains(el) || !el.dataset || !el.dataset.tx) return null;
+    return { tx: el.dataset.tx, year: el.dataset.year, start: el.selectionStart };
+  }
+
+  function restoreCellFocus(container, ref) {
+    if (!ref) return;
+    var next = container.querySelector(
+      'input[data-tx="' + (window.CSS && CSS.escape ? CSS.escape(ref.tx) : ref.tx) + '"][data-year="' + ref.year + '"]');
+    if (!next) return;
+    next.focus();
+    try { next.setSelectionRange(ref.start, ref.start); } catch (e) { /* not selectable */ }
   }
 
   /**
@@ -230,6 +277,8 @@
       input.inputMode = 'decimal';
       input.value = formatCell(CashFlow.amountForYear(tx, year));
       input.setAttribute('aria-label', tx.label + ', ' + year);
+      input.dataset.tx = tx.id;
+      input.dataset.year = year;
       input.title = overridden
         ? 'Overridden by hand. Clear the cell to hand it back to the '
           + (CashFlow.SOURCES[tx.source] || 'source tab') + '.'
@@ -368,6 +417,7 @@
   /** The horizon is set here but shapes the other tabs' projections too. */
   function notifyHorizon() {
     if (window.ExpensesTab) window.ExpensesTab.onHorizonChange();
+    if (window.LifeEventsTab) window.LifeEventsTab.onHorizonChange();
     if (window.SavingsTab) window.SavingsTab.onSalaryChange();
   }
 
