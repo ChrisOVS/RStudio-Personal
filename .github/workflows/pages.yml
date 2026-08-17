@@ -22,6 +22,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      pages_ready: ${{ steps.pages.outcome == 'success' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -68,16 +70,32 @@ jobs:
             test -s "_site/$f" || { echo "missing $f"; exit 1; }
           done
 
-      - uses: actions/configure-pages@v5
-        with:
-          enablement: true
+      # Pages has to be switched on once by hand: Settings -> Pages -> Source:
+      # "GitHub Actions". The workflow token is not allowed to create the site
+      # itself, so `enablement: true` only produced "Resource not accessible by
+      # integration" and failed the whole run.
+      #
+      # Publishing is therefore optional. Tests and the build still run and
+      # still gate merges; only the deploy is skipped, with a note saying which
+      # setting to flip — a red X on every push for a setting nobody has flipped
+      # is noise, not a signal.
+      - id: pages
+        uses: actions/configure-pages@v5
+        continue-on-error: true
+
+      - name: Explain that publishing was skipped
+        if: steps.pages.outcome != 'success'
+        run: |
+          echo "::notice title=Pages not enabled::Tests and build passed. To publish, enable Pages once: Settings -> Pages -> Source: GitHub Actions, then re-run this workflow."
 
       - uses: actions/upload-pages-artifact@v3
+        if: steps.pages.outcome == 'success'
         with:
           path: _site
 
   deploy:
     needs: build
+    if: needs.build.outputs.pages_ready == 'true'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
