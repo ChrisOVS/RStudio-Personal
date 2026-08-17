@@ -23,7 +23,7 @@
       <button class="tab" role="tab" data-tab="cashflow" aria-selected="false" id="tab-cashflow">Cash flow</button>
       <button class="tab" role="tab" data-tab="expenses" aria-selected="false">Expenses <span class="soon">soon</span></button>
       <button class="tab" role="tab" data-tab="lifeevents" aria-selected="false">Life events <span class="soon">soon</span></button>
-      <button class="tab" role="tab" data-tab="savings" aria-selected="false">Savings <span class="soon">soon</span></button>
+      <button class="tab" role="tab" data-tab="savings" aria-selected="false" id="tab-savings">Savings &amp; investments</button>
     </div>
   </div>
 </header>
@@ -356,11 +356,56 @@
     </div>
   </section>
 
-  <section class="tab-panel" data-panel="savings" role="tabpanel" hidden>
-    <div class="card placeholder">
-      <h2>Savings &amp; investments</h2>
-      <p>Not built yet. It will read the projected balance already computed on the
-         Cash flow tab and break it out by account, contribution limit and asset mix.</p>
+  <!-- ================================================ SAVINGS TAB -->
+  <section class="tab-panel" data-panel="savings" role="tabpanel" aria-labelledby="tab-savings" hidden>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="k">Projected total</div>
+        <div class="v is-hero" id="sv-stat-total">—</div>
+        <div class="sub" id="sv-stat-total-sub"></div>
+      </div>
+      <div class="stat">
+        <div class="k">Going in each year</div>
+        <div class="v" id="sv-stat-contrib">—</div>
+        <div class="sub" id="sv-stat-contrib-sub"></div>
+      </div>
+      <div class="stat">
+        <div class="k">Of that, growth</div>
+        <div class="v" id="sv-stat-growth">—</div>
+        <div class="sub" id="sv-stat-growth-sub"></div>
+      </div>
+      <div class="stat">
+        <div class="k">Out of take-home</div>
+        <div class="v" id="sv-stat-takehome">—</div>
+        <div class="sub" id="sv-stat-takehome-sub"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:20px">
+      <div class="card-head">
+        <h2>Your accounts</h2>
+        <p>Each account keeps its own balance, contribution and expected return.
+           The horizon matches the Cash flow tab.</p>
+      </div>
+
+      <div id="sv-note" class="note"></div>
+
+      <div id="sv-accounts" class="sv-accounts"></div>
+
+      <div class="cf-add-row">
+        <select id="sv-add-type" aria-label="Type of account to add"></select>
+        <button type="button" id="sv-add" class="cf-add-btn">Add account</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:20px">
+      <div class="card-head">
+        <h2>Projected balance</h2>
+        <p>Everything combined, against what you would have from contributions alone.
+           The gap between the lines is the growth.</p>
+      </div>
+      <div class="chart-scroll"><svg id="chart-savings"></svg></div>
     </div>
   </section>
 
@@ -369,8 +414,10 @@
 <script src="js/tax-data.js"></script>
 <script src="js/calc.js"></script>
 <script src="js/cashflow.js"></script>
+<script src="js/savings.js"></script>
 <script src="js/charts.js"></script>
 <script src="js/cashflow-ui.js"></script>
+<script src="js/savings-ui.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

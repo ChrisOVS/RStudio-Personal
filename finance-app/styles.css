@@ -562,3 +562,43 @@ details.table-toggle[open] summary { margin-bottom: 8px; }
   .cf-manage-head { display: none; }
   .cf-manage-row { grid-template-columns: 1fr 1fr; }
 }
+
+/* ------------------------------------------------- savings & investments -- */
+
+.sv-accounts { display: grid; gap: 12px; margin-top: 4px; }
+
+.sv-account {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  background: var(--surface);
+}
+.sv-account.is-linked { background: var(--surface-sunken); }
+
+.sv-account-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.sv-name { font-weight: 600; font-size: 14px; }
+.sv-name-input { width: auto; flex: 1 1 180px; font-weight: 600; padding: 6px 9px; }
+.sv-account-head .cf-del { margin-left: auto; }
+
+/* Pre-tax vs post-tax is the distinction that stops double-counting, so it is
+   labelled on every account rather than left to colour. */
+.sv-flag {
+  font-size: 11px; border-radius: 999px; padding: 2px 9px;
+  border: 1px solid var(--border); color: var(--text-secondary); white-space: nowrap;
+}
+.sv-flag.is-payroll { background: var(--surface-sunken); }
+.sv-flag.is-posttax { background: var(--surface-sunken); border-color: var(--series-1); color: var(--accent-ink); }
+
+.sv-account-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.sv-account-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--text-secondary); }
+.sv-account-grid input { padding: 7px 9px; font-size: 13.5px; }
+.sv-account-grid input:disabled { background: var(--surface-sunken); color: var(--text-muted); cursor: not-allowed; }
+
+.sv-account-foot {
+  display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  margin-top: 10px; font-size: 12px; color: var(--text-muted);
+}
+.sv-projected { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+
+/* The add-account picker is a control, not a row — keep it from stretching. */
+#sv-add-type { flex: 0 1 240px; width: auto; }

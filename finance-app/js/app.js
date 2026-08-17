@@ -123,16 +123,23 @@
     // Keep the last result where the cash flow source provider can read it, then
     // ask the ledger to rebuild so the income row tracks this salary.
     latestResult = r;
+    // The Savings tab mirrors the 401(k) figure, so let it redraw before the
+    // ledger rebuilds and picks up both tabs' rows in one pass.
+    if (window.SavingsTab) window.SavingsTab.onSalaryChange();
     if (window.CashFlowTab) window.CashFlowTab.refresh();
   }
 
   var latestResult = null;
 
   /**
-   * What this tab contributes to the cash flow ledger: take-home pay as an
-   * income row, and the pre-tax deductions as their own rows, since money going
-   * into a 401(k) is a real outflow from your paycheck even though it is still
-   * yours. Rebuilt from scratch on every salary change.
+   * What this tab contributes to the cash flow ledger: net take-home pay, and
+   * nothing else.
+   *
+   * Take-home is ALREADY net of tax, the 401(k) deferral and health premiums.
+   * An earlier version also pushed those deductions through as outflow rows,
+   * which subtracted the same money twice and understated every year's net.
+   * Payroll deductions belong to the tabs that own them — the Savings tab shows
+   * the 401(k) building a balance without ever touching cash flow.
    */
   function cashFlowRows() {
     if (!latestResult || latestResult.gross <= 0) return [];
@@ -140,41 +147,23 @@
       ? window.CashFlowTab.getState().startYear
       : new Date().getFullYear();
 
-    var rows = [{
+    var amounts = {};
+    amounts[year] = latestResult.takeHome;
+
+    return [{
       id: 'salary_takehome',
-      label: 'Take-home pay',
+      label: 'Net salary (take-home)',
       group: 'Income',
       kind: 'income',
       cadence: 'annual',
       startYear: year,
-      amounts: (function () { var a = {}; a[year] = latestResult.takeHome; return a; })()
+      amounts: amounts
     }];
+  }
 
-    if (latestResult.retirement > 0) {
-      rows.push({
-        id: 'salary_retirement',
-        label: 'Retirement contributions',
-        group: 'Savings',
-        kind: 'expense',
-        cadence: 'annual',
-        startYear: year,
-        amounts: (function () { var a = {}; a[year] = latestResult.retirement; return a; })()
-      });
-    }
-
-    if (latestResult.section125 > 0) {
-      rows.push({
-        id: 'salary_benefits',
-        label: 'Health / HSA / FSA premiums',
-        group: 'Benefits',
-        kind: 'expense',
-        cadence: 'annual',
-        startYear: year,
-        amounts: (function () { var a = {}; a[year] = latestResult.section125; return a; })()
-      });
-    }
-
-    return rows;
+  /** The Savings tab reads the 401(k) figure from here rather than duplicating it. */
+  function getPayrollRetirement() {
+    return latestResult ? latestResult.retirement : 0;
   }
 
   function renderStats(r, per, freq) {
@@ -430,6 +419,9 @@
 
     // Register before the first render, so the ledger picks up salary immediately.
     if (window.CashFlowTab) window.CashFlowTab.registerSource('salary', cashFlowRows);
+    // Expose the payroll 401(k) so the Savings tab can mirror it rather than
+    // asking for the same number twice.
+    window.SalaryTab = { getPayrollRetirement: getPayrollRetirement };
 
     render();
   }

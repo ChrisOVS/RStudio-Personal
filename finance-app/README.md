@@ -5,8 +5,9 @@ salary, a bonus, your pre-tax deductions and a state, and it breaks the year
 down into take-home pay, federal tax, state tax and FICA — weekly, bi-weekly,
 semi-monthly, monthly or annually.
 
-Two tabs are built: **Salary** and **Cash flow**. Expenses, Life events and
-Savings are stubs that plug into the cash flow ledger when they land.
+Three tabs are built: **Salary**, **Cash flow** and **Savings & investments**.
+Expenses and Life events are stubs that plug into the cash flow ledger when they
+land.
 
 ## Running it
 
@@ -30,9 +31,9 @@ The calculation engine is a pure module with no DOM, so it runs under plain Node
 cd finance-app && npm test
 ```
 
-142 assertions across two suites — 63 for the tax engine, 79 for the cash flow
-ledger. Expected values are worked out by hand from the published 2026 tables
-rather than read back out of the implementation.
+191 assertions across three suites — 63 for the tax engine, 79 for the cash flow
+ledger, 49 for savings. Expected values are worked out by hand from the published
+2026 tables rather than read back out of the implementation.
 
 ## What it models
 
@@ -117,12 +118,15 @@ finance-app/
 │   ├── tax-data.js     2026 federal + 50 states + DC parameters
 │   ├── calc.js         the tax engine — pure, no DOM, testable
 │   ├── cashflow.js     the shared ledger — pure, no DOM, testable
+│   ├── savings.js      accounts and balance projection — pure, testable
 │   ├── charts.js       hand-rolled SVG charts, no chart library
 │   ├── cashflow-ui.js  the cash flow tab: table, editor, charts
+│   ├── savings-ui.js   the savings & investments tab
 │   └── app.js          salary tab wiring and rendering
 └── test/
     ├── calc.test.js
-    └── cashflow.test.js
+    ├── cashflow.test.js
+    └── savings.test.js
 ```
 
 `tax-data.js` and `calc.js` export via UMD so the browser and the test suite run
@@ -172,9 +176,8 @@ row behind. Derived rows are locked in the table — editing them by hand would 
 silently overwritten on the next refresh. Only manual rows are hand-editable and
 persisted to localStorage.
 
-The Salary tab is wired in today: take-home becomes an income row, and 401(k)
-and health premiums become their own outflow rows, since money going into a
-401(k) really does leave your paycheck even though it stays yours.
+The Salary tab pushes exactly one row: **net take-home pay**, as income. See
+"Not counting the same money twice" below for why it is only one.
 
 ### What it projects
 
@@ -190,9 +193,42 @@ Amounts are stored at the transaction's own cadence — a monthly row holds a
 per-month figure — so entry stays natural and nothing goes stale if the cadence
 changes.
 
+## Savings & investments
+
+Each account carries its own balance, contribution, expected return and — the
+part that matters — **where the contribution comes from**:
+
+| Type | Comes from | On the cash flow table? |
+|---|---|---|
+| 401(k) / 403(b), payroll HSA | Pre-tax payroll | **No** |
+| IRA, brokerage, cash savings | Your take-home | **Yes**, as an outflow |
+
+The 401(k) row is **mirrored from the Salary tab's pre-tax field** rather than
+asked for twice, so there is one place to change it and no way for the two to
+disagree. The employer match is the one thing this tab adds to it.
+
+`fromPayroll` is a property of the account *type* and cannot be set by hand —
+letting it be chosen freely would make double-counting a one-click mistake.
+
+### Not counting the same money twice
+
+Take-home pay is already net of tax, the 401(k) deferral and health premiums. So
+the ledger takes **net take-home as the income line, and nothing else from the
+Salary tab.**
+
+An earlier version also pushed the 401(k) and health premiums through as outflow
+rows. That subtracted the same money twice and understated every year's net — on
+a $145k salary with a $12k deferral it reported $82k of net cash flow instead of
+$94k. Payroll deductions now belong to the tab that owns them: the Savings tab
+shows the 401(k) building a balance without ever touching cash flow.
+
+Money invested **out of take-home** is a different case and does belong on the
+table — it competes with the rest of your spending. Employer match never does:
+it is money arriving, not leaving.
+
 ## Charts
 
-Five, all inline SVG with hover tooltips and keyboard focus:
+Six, all inline SVG with hover tooltips and keyboard focus:
 
 1. **Where your gross pay goes** — one bar per component, single hue.
 2. **How your federal tax is built** — tax generated inside each bracket, with
@@ -201,8 +237,10 @@ Five, all inline SVG with hover tooltips and keyboard focus:
    percentages), with a marker at your salary.
 4. **Net cash flow by year** — diverging bars, surplus against shortfall, off a
    zero baseline.
-5. **Projected balance** — balance with growth against contributions alone, both
-   in dollars on one axis, so the gap between them is exactly the compounding.
+5. **Projected balance** (Cash flow) — balance with growth against contributions
+   alone, both in dollars on one axis, so the gap between them is exactly the
+   compounding.
+6. **Projected balance** (Savings) — the same treatment across all accounts.
 
 Colors come from a palette validated for colour-blind separation and contrast in
 both light and dark mode. An earlier draft used a stacked bar for chart 1; it was
@@ -222,5 +260,7 @@ That writes `dist/paycheck-calculator.html` — around 90 KB, fully self-contain
 works offline. `--fragment` writes a version without the document wrapper for
 hosts that supply their own.
 
-The bundle is generated from the real source files, so it can never drift from
-what the tests run against.
+The script list is **read out of `index.html`**, not hardcoded, and the build
+fails if any file in `js/` is not loaded by the page. A hardcoded list had gone
+stale once and shipped a bundle containing the Cash flow markup with none of its
+code — a build that looked fine and did nothing.
