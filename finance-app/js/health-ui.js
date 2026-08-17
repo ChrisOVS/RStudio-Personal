@@ -127,6 +127,23 @@
   function renderDataPanel() {
     var s = Storage.summary();
     var status = $('hl-save-status');
+    var srv = Storage.serverStatus();
+
+    // Running as a desktop app: there is a real file behind this, and that is
+    // the more reassuring thing to say, so it takes precedence.
+    if (srv.active) {
+      status.className = srv.lastError ? 'note is-warn' : 'note is-good';
+      status.innerHTML = srv.lastError
+        ? '<strong>Saving failed.</strong> ' + esc(srv.lastError)
+        : '<strong>Saving to a file on this PC.</strong> '
+          + '<code class="hl-path">' + esc(srv.file) + '</code>'
+          + (srv.lastSavedAt
+              ? ' — last written at ' + srv.lastSavedAt.toLocaleTimeString() + '.'
+              : ' — writes as you type.')
+          + ' Copy that file to back it up or move it to another machine. '
+          + 'The last 20 versions are kept in a <code class="hl-path">backups</code> folder beside it.';
+      return;
+    }
 
     if (!s.available) {
       status.className = 'note is-warn';
@@ -191,6 +208,19 @@
     } catch (e) { /* ignore */ }
 
     detectSaveMode().then(labelSaveButton);
+
+    // If a local server is behind this page, adopt the file's contents and
+    // mirror every later change back to it.
+    Storage.setStatusListener(function () { renderDataPanel(); });
+    Storage.connect().then(function (loaded) {
+      if (loaded === null) return;              // ordinary web page
+      renderDataPanel();
+      if (loaded > 0) {
+        // The tabs read localStorage during their own init, which already
+        // happened, so they are showing the pre-file state until reloaded.
+        location.reload();
+      }
+    });
     $('hl-download').addEventListener('click', downloadBackup);
     $('hl-copy-link').addEventListener('click', copyLink);
     $('hl-import').addEventListener('change', importFile);

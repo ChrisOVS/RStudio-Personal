@@ -9,7 +9,39 @@ Six tabs: **Health**, **Salary**, **Cash flow**, **Expenses**, **Life events**
 and **Savings & investments**. Salary, Expenses and Life events feed the cash
 flow ledger; Savings and Health read from it.
 
-## Running it
+## Running it on your PC
+
+Double-click one of these:
+
+| | |
+|---|---|
+| **Windows** | `Start Paycheck (Windows).bat` |
+| **Mac** | `Start Paycheck (Mac).command` |
+| **Linux** | `start-mac-linux.sh` |
+
+It opens in your browser and **saves to a real file on your machine**:
+
+```
+finance-app/data/paycheck-finance.json
+```
+
+Copy that file to back it up or move it to another computer. The last 20
+versions are kept in `data/backups/` — the server snapshots before every write,
+so a bad import is recoverable.
+
+You need **either Node or Python 3** installed; not both, and nothing else. The
+launcher finds whichever you have and tells you where to get one if you have
+neither. The server is standard library only — no packages, nothing to patch.
+
+It binds to `127.0.0.1`, so nothing on your network can reach it even on shared
+wifi. Press Ctrl+C in the window to stop.
+
+### With nothing installed at all
+
+`dist/paycheck-calculator.html` opens straight in a browser and works fully — it
+just saves inside the browser rather than to a file.
+
+## Other ways to run it
 
 **Hosted:** pushed to `main`, it deploys to GitHub Pages automatically — see
 `.github/workflows/pages.yml`. The site is installable to a phone home screen and
@@ -407,6 +439,25 @@ The link packs your figures into the URL **fragment**. Browsers never send the
 part after `#` to a server, so hosting the app publicly does not expose anything
 — but the link itself carries your data, so it is for bookmarking and mailing to
 yourself, not for posting. The app says so next to the button.
+
+## How the local file works
+
+The six tab modules still write to `localStorage` exactly as they always did and
+know nothing about any of this. `storage.js` wraps `localStorage.setItem`, and a
+debounced sync mirrors those writes to the file. One place to get right, and a
+tab added later cannot forget to save.
+
+On startup the **file wins** over the browser copy — it is the durable one, the
+browser is just this session's working state. That is what makes a wiped browser
+or a different browser pick up exactly where you left off.
+
+The file is only adopted when it actually **differs** from what the browser holds.
+An earlier version applied it unconditionally and reloaded to let the tabs re-read
+it, which meant reloading on every single load once the file had anything in it —
+a permanent reload loop, 79 page loads in 8 seconds.
+
+Writes go to a temp file and are renamed into place. Rename is atomic, so an
+interruption mid-write leaves the previous file intact rather than a truncated one.
 
 ## Charts
 

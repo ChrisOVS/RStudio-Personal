@@ -177,6 +177,150 @@
     }
   }
 
+  /* ------------------------------------------------- the local-server mode */
+
+  /*
+   * When the app is launched by desktop/server.js (or server.py), there is a
+   * real file on this PC behind it. The six tab modules keep writing to
+   * localStorage exactly as before and know nothing about any of this — a sync
+   * layer mirrors those writes to the file.
+   *
+   * Doing it here rather than in each tab means one place to get right, and no
+   * risk of a tab being added later that forgets to save.
+   */
+
+  var server = {
+    active: false,
+    file: null,
+    lastError: null,
+    lastSavedAt: null,
+    onChange: null      // set by the UI so it can show the status
+  };
+
+  function notify() { if (typeof server.onChange === 'function') server.onChange(server); }
+
+  /** Is a local server behind this page? */
+  function probeServer() {
+    return fetch('api/info', { method: 'GET' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (info) {
+        if (!info || info.mode !== 'local-server') return null;
+        server.active = true;
+        server.file = info.file;
+        return info;
+      })
+      .catch(function () { return null; });   // no server: ordinary browser mode
+  }
+
+  /** Stable comparison of two section maps, so key order cannot fake a change. */
+  function sameData(a, b) {
+    var ka = Object.keys(a || {}).sort();
+    var kb = Object.keys(b || {}).sort();
+    if (ka.length !== kb.length) return false;
+    for (var i = 0; i < ka.length; i++) {
+      if (ka[i] !== kb[i]) return false;
+      if (JSON.stringify(a[ka[i]]) !== JSON.stringify(b[kb[i]])) return false;
+    }
+    return true;
+  }
+
+  function loadFromServer() {
+    return fetch('api/data')
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (payload) {
+        if (!payload || !payload.data || !Object.keys(payload.data).length) return 0;
+
+        // Only adopt the file when it actually differs from what this browser
+        // already holds. Applying unconditionally made the caller reload on
+        // every single load — a permanent reload loop, since the file always
+        // has data once you have typed anything.
+        if (sameData(collect().data, payload.data)) return 0;
+
+        return apply(payload);
+      })
+      .catch(function () { return 0; });
+  }
+
+  var syncTimer = null;
+  var syncing = false;
+  var syncAgain = false;
+
+  function pushToServer() {
+    if (!server.active) return Promise.resolve(false);
+    // One request at a time. Overlapping PUTs could land out of order and write
+    // an older snapshot last, which is the one way this could lose data.
+    if (syncing) { syncAgain = true; return Promise.resolve(false); }
+    syncing = true;
+
+    return fetch('api/data', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(collect())
+    })
+      .then(function (r) {
+        if (!r.ok) throw new Error('save failed');
+        server.lastSavedAt = new Date();
+        server.lastError = null;
+      })
+      .catch(function (e) {
+        server.lastError = 'Could not write to the file. Is the app window still running?';
+      })
+      .then(function () {
+        syncing = false;
+        notify();
+        if (syncAgain) { syncAgain = false; scheduleSync(); }
+        return true;
+      });
+  }
+
+  /** Debounced: typing a salary fires a write per keystroke otherwise. */
+  function scheduleSync() {
+    if (!server.active) return;
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(pushToServer, 400);
+  }
+
+  /**
+   * Watch localStorage for our own keys.
+   *
+   * Wrapping setItem is the least invasive hook available: every tab already
+   * saves through it, so nothing else has to change and nothing can forget.
+   */
+  function watchWrites() {
+    var native = localStorage.setItem.bind(localStorage);
+    localStorage.setItem = function (key, value) {
+      native(key, value);
+      if (String(key).indexOf(PREFIX) === 0 && EXCLUDE.indexOf(key) === -1) scheduleSync();
+    };
+    var nativeRemove = localStorage.removeItem.bind(localStorage);
+    localStorage.removeItem = function (key) {
+      nativeRemove(key);
+      if (String(key).indexOf(PREFIX) === 0 && EXCLUDE.indexOf(key) === -1) scheduleSync();
+    };
+  }
+
+  /**
+   * Connect to the file, if there is one. Resolves with how many sections were
+   * loaded from disk, or null when running as an ordinary web page.
+   *
+   * The file wins over localStorage on startup: it is the durable copy, and the
+   * browser copy is just this session's working state.
+   */
+  function connect() {
+    if (typeof fetch !== 'function') return Promise.resolve(null);
+    return probeServer().then(function (info) {
+      if (!info) return null;
+      watchWrites();
+      return loadFromServer().then(function (n) {
+        notify();
+        return n;
+      });
+    });
+  }
+
+  function serverStatus() { return server; }
+  function setStatusListener(fn) { server.onChange = fn; }
+
   function filename() {
     var d = new Date();
     var pad = function (n) { return String(n).padStart(2, '0'); };
@@ -197,6 +341,11 @@
     toLink: toLink,
     fromLocation: fromLocation,
     stripLocation: stripLocation,
-    filename: filename
+    filename: filename,
+    sameData: sameData,
+    connect: connect,
+    pushToServer: pushToServer,
+    serverStatus: serverStatus,
+    setStatusListener: setStatusListener
   };
 });
