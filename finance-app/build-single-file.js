@@ -47,6 +47,12 @@ var scripts = scriptSrcs
 
 var title = (html.match(/<title>([\s\S]*?)<\/title>/) || [, 'Paycheck Calculator'])[1].trim();
 
+// Carry the page's own viewport tag rather than a hardcoded copy — the real one
+// has viewport-fit=cover on it, and a stale duplicate here would silently drop it.
+var viewport = (html.match(/<meta\s+name="viewport"[^>]*>/) || [
+  '<meta name="viewport" content="width=device-width, initial-scale=1">'
+])[0];
+
 // Pull the body, then drop the <script src> tags — they are being inlined.
 var body = (html.match(/<body[^>]*>([\s\S]*)<\/body>/) || [, ''])[1]
   .replace(/[ \t]*<script\s+src=[^>]*><\/script>\s*/g, '')
@@ -70,7 +76,7 @@ if (fragment) {
 } else {
   out = '<!doctype html>\n<html lang="en">\n<head>\n'
     + '<meta charset="utf-8">\n'
-    + '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+    + viewport + '\n'
     + parts[0] + '\n' + parts[1] + '\n'
     + '</head>\n<body>\n\n' + parts[2] + '\n\n' + parts[3] + '\n</body>\n</html>\n';
 }

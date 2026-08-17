@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Paycheck &amp; Finance</title>
 <meta name="description" content="Work out take-home pay from an annual salary, bonus and pre-tax deductions, for any US state.">
 <link rel="stylesheet" href="styles.css">
@@ -19,6 +19,7 @@
     <button type="button" class="theme-toggle" id="theme-toggle">Dark mode</button>
 
     <div class="tabs" role="tablist" aria-label="Sections">
+      <button class="tab" role="tab" data-tab="health" aria-selected="false" id="tab-health">Health</button>
       <button class="tab" role="tab" data-tab="salary" aria-selected="true" id="tab-salary">Salary</button>
       <button class="tab" role="tab" data-tab="cashflow" aria-selected="false" id="tab-cashflow">Cash flow</button>
       <button class="tab" role="tab" data-tab="expenses" aria-selected="false" id="tab-expenses">Expenses</button>
@@ -29,6 +30,65 @@
 </header>
 
 <main class="wrap">
+
+
+  <!-- ======================================================= HEALTH TAB -->
+  <section class="tab-panel" data-panel="health" role="tabpanel" aria-labelledby="tab-health" hidden>
+
+    <div class="hl-hero card">
+      <div class="hl-dial">
+        <svg viewBox="0 0 120 120" role="img" aria-label="Overall financial health score">
+          <circle cx="60" cy="60" r="52" class="hl-ring-track"></circle>
+          <circle cx="60" cy="60" r="52" class="hl-ring-fill" id="hl-ring-fill"
+                  transform="rotate(-90 60 60)"></circle>
+        </svg>
+        <div class="hl-score-value" id="hl-score">—</div>
+      </div>
+      <div class="hl-hero-text">
+        <h2 id="hl-score-label">Not enough to say yet</h2>
+        <p id="hl-score-blurb"></p>
+        <span class="hl-counted" id="hl-score-counted"></span>
+      </div>
+    </div>
+
+    <div class="hl-metrics" id="hl-metrics"></div>
+
+    <div class="card" style="margin-top:20px">
+      <div class="card-head">
+        <h2>Your data</h2>
+        <p>Everything stays on this device. Nothing you type is ever sent anywhere.</p>
+      </div>
+
+      <div id="hl-save-status" class="note"></div>
+
+      <div class="hl-actions">
+        <button type="button" id="hl-download" class="cf-add-btn">Download a backup</button>
+        <button type="button" id="hl-copy-link" class="hl-btn">Copy a restore link</button>
+        <label class="hl-btn hl-file">
+          Load a backup
+          <input type="file" id="hl-import" accept="application/json,.json" hidden>
+        </label>
+        <button type="button" id="hl-clear" class="hl-btn is-danger">Erase everything</button>
+      </div>
+
+      <textarea id="hl-link-box" class="hl-link-box" rows="3" readonly hidden
+                aria-label="Restore link"></textarea>
+      <div id="hl-save-flash" class="hl-flash" role="status"></div>
+
+      <details class="table-toggle">
+        <summary>Why is there no Google or Apple sign-in?</summary>
+        <div class="hl-explain">
+          <p>Because this app has no server. It is one file that runs entirely in your
+             browser, and it never sends anything anywhere — which is rather the point
+             when the contents are your salary.</p>
+          <p>A real sign-in needs a backend holding secrets, and it would mean uploading
+             your figures to it. The three options above cover the same ground without
+             that: this device remembers you automatically, a backup file survives a
+             wiped browser, and a restore link opens your figures on any other device.</p>
+        </div>
+      </details>
+    </div>
+  </section>
 
   <!-- ======================================================= SALARY TAB -->
   <section class="tab-panel" data-panel="salary" role="tabpanel" aria-labelledby="tab-salary">
@@ -586,11 +646,14 @@
 <script src="js/expenses.js"></script>
 <script src="js/life-events.js"></script>
 <script src="js/pay-schedule.js"></script>
+<script src="js/health.js"></script>
+<script src="js/storage.js"></script>
 <script src="js/charts.js"></script>
 <script src="js/cashflow-ui.js"></script>
 <script src="js/savings-ui.js"></script>
 <script src="js/expenses-ui.js"></script>
 <script src="js/life-events-ui.js"></script>
+<script src="js/health-ui.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

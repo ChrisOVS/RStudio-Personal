@@ -91,6 +91,8 @@
     Charts.renderNetFlow($('chart-netflow'), p.years, p.net);
     Charts.renderBalance($('chart-balance'), p.years, p.balance, p.cumulativeNet);
     renderSourceNote();
+    // The Health tab reads every other tab, and cash flow is the last to settle.
+    if (window.HealthTab) window.HealthTab.refresh();
   }
 
   /** Your own contributions per year, from the Savings tab. Excludes employer match. */

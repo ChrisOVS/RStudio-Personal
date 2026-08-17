@@ -515,6 +515,18 @@
 
   /* ---------------------------------------------------------------- tabs -- */
 
+  /**
+   * Where to land. A returning visitor gets the summary, since their figures are
+   * already in; a first-timer gets Salary, because an empty summary tells you
+   * nothing and gives you nowhere to start.
+   */
+  function initialTab() {
+    try {
+      if (window.Storage && Storage.summary().sections > 0) return 'health';
+    } catch (e) { /* fall through */ }
+    return 'salary';
+  }
+
   function initTabs() {
     var tabs = Array.prototype.slice.call(document.querySelectorAll('.tab'));
     tabs.forEach(function (tab) {
@@ -603,6 +615,7 @@
       render();
     });
 
+    selectTab(initialTab());
     $('tax-year').textContent = TaxData.TAX_YEAR;
 
     // Register before the first render, so the ledger picks up salary immediately.

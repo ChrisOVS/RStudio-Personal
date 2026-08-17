@@ -5,9 +5,9 @@ salary, a bonus, your pre-tax deductions and a state, and it breaks the year
 down into take-home pay, federal tax, state tax and FICA — weekly, bi-weekly,
 semi-monthly, monthly or annually.
 
-All five tabs are built: **Salary**, **Expenses**, **Life events**, **Cash flow**
-and **Savings & investments**. The first three feed the cash flow ledger; the
-last reads from it.
+Six tabs: **Health**, **Salary**, **Cash flow**, **Expenses**, **Life events**
+and **Savings & investments**. Salary, Expenses and Life events feed the cash
+flow ledger; Savings and Health read from it.
 
 ## Running it
 
@@ -31,10 +31,10 @@ The calculation engine is a pure module with no DOM, so it runs under plain Node
 cd finance-app && npm test
 ```
 
-367 assertions across five suites — 63 for the tax engine, 98 for the cash flow
-ledger, 56 for savings, 67 for expenses, 83 for life events and the pay schedule.
-Expected values are worked out by hand from the published 2026 tables rather than
-read back out of the implementation.
+430 assertions across six suites — 63 for the tax engine, 98 for the cash flow
+ledger, 56 for savings, 67 for expenses, 83 for life events and the pay schedule,
+63 for health. Expected values are worked out by hand from the published 2026
+tables rather than read back out of the implementation.
 
 ## What it models
 
@@ -123,18 +123,22 @@ finance-app/
 │   ├── expenses.js     recurring expenses, inflation, buffer — pure, testable
 │   ├── life-events.js  one-off lumpy money — pure, testable
 │   ├── pay-schedule.js expected pay by year — pure, testable
+│   ├── health.js       financial health metrics — pure, testable
+│   ├── storage.js      save, restore, export — pure, testable
 │   ├── charts.js       hand-rolled SVG charts, no chart library
 │   ├── cashflow-ui.js  the cash flow tab: table, editor, charts
 │   ├── savings-ui.js   the savings & investments tab
 │   ├── expenses-ui.js  the expenses tab
 │   ├── life-events-ui.js  the life events tab
+│   ├── health-ui.js    the health tab and the data panel
 │   └── app.js          salary tab wiring and rendering
 └── test/
     ├── calc.test.js
     ├── cashflow.test.js
     ├── savings.test.js
     ├── expenses.test.js
-    └── life-events.test.js
+    ├── life-events.test.js
+    └── health.test.js
 ```
 
 `tax-data.js` and `calc.js` export via UMD so the browser and the test suite run
@@ -318,6 +322,52 @@ different questions:
 Employer match is deliberately excluded from the add-back: it builds your balance
 on the Savings tab but never passed through your hands, so counting it as retained
 cash would misstate what you kept.
+
+## Health
+
+Seven ratios against the usual rules of thumb, each with the reasoning attached
+so the number is never just a colour: savings rate, emergency fund, spending vs
+take-home, housing share, whether the plan holds up, retirement progress against
+25× spending, and effective tax rate for context.
+
+Two rules keep the score honest:
+
+- **A metric with no data reports `unknown` and is left out of the score
+  entirely** — not scored zero. An empty app says "not enough to say yet"; it
+  does not tell you your finances are broken because you have not typed anything.
+- **Tax is reported, not scored.** Most of it is not a choice, so weighting it
+  would punish you for your bracket.
+
+Cards are ordered worst-first, so the thing to fix is at the top. Status colour
+is never alone — every card carries a worded chip and a coloured rule.
+
+## Saving your data
+
+There is no server. The app is one file that runs entirely in your browser and
+never sends anything anywhere, which is also why there is no Google or Apple
+sign-in: OAuth needs a backend holding client secrets, and any such flow would
+mean your salary leaving your machine. Persistence is done three ways instead:
+
+| | What it survives | Effort |
+|---|---|---|
+| **Automatic** (localStorage) | Closing the tab, restarting the browser | none |
+| **Backup file** (JSON) | Clearing your browser, moving machines | one click |
+| **Restore link** (URL fragment) | Any device, no account | one click |
+
+All three carry the same payload, so a file saved today opens from a link
+tomorrow. Restoring clears existing keys first rather than merging — a
+half-merged ledger would be worse than either version.
+
+The backup uses the artifact `downloads` capability where the page has it, and
+falls back to an ordinary blob download everywhere else.
+
+## Mobile
+
+The one that matters: **iOS Safari zooms the page whenever a focused control has
+a font-size under 16px.** Every control is therefore 16px on coarse-pointer
+devices. The usual shortcut — `maximum-scale=1` in the viewport tag — also stops
+the zoom, by disabling pinch-zoom entirely, which breaks the page for anyone who
+needs to magnify it. That is not a trade worth making, so it is not used here.
 
 ## Charts
 
