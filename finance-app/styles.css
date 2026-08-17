@@ -871,3 +871,14 @@ input[type="text"]:hover, input[type="number"]:hover, select:hover { border-colo
   .hl-hero { gap: 18px; }
   .hl-actions .hl-btn, .hl-actions .cf-add-btn { flex: 1 1 auto; text-align: center; }
 }
+
+.hl-caution {
+  font-size: 12.5px; color: var(--text-secondary); line-height: 1.6;
+  margin: 14px 0 0; padding: 10px 13px;
+  background: var(--surface-sunken); border: 1px solid var(--border);
+  border-left: 3px solid var(--warn); border-radius: 0 8px 8px 0;
+}
+.hl-caution code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: var(--surface); padding: 1px 5px; border-radius: 4px; font-size: 11.5px;
+}

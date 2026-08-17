@@ -11,13 +11,18 @@ flow ledger; Savings and Health read from it.
 
 ## Running it
 
-No build step, no dependencies, no network calls. Open the file:
+**Hosted:** pushed to `main`, it deploys to GitHub Pages automatically — see
+`.github/workflows/pages.yml`. The site is installable to a phone home screen and
+works offline.
+
+**Locally**, no build step, no dependencies, no network calls:
 
 ```
 open finance-app/index.html
 ```
 
-Or serve it if you prefer a real origin:
+Or serve it if you want the service worker and manifest to work, which need a
+real origin:
 
 ```
 cd finance-app && python3 -m http.server 8000
@@ -368,6 +373,40 @@ a font-size under 16px.** Every control is therefore 16px on coarse-pointer
 devices. The usual shortcut — `maximum-scale=1` in the viewport tag — also stops
 the zoom, by disabling pinch-zoom entirely, which breaks the page for anyone who
 needs to magnify it. That is not a trade worth making, so it is not used here.
+
+## Hosting
+
+`.github/workflows/pages.yml` builds and deploys on every push to `main` that
+touches `finance-app/`. The job runs the full test suite first — a red build
+never reaches the site — then assembles `_site`, verifies every script the page
+references is actually present, and deploys.
+
+The standalone single-file build is published alongside as `/standalone.html`,
+so there is always one file you can save and open with no server at all.
+
+### Offline and installable
+
+A manifest and a service worker make the hosted copy installable to a phone home
+screen and usable with no connection.
+
+The service worker strategy is deliberately conservative, because the classic
+failure is a page that caches itself and never updates again:
+
+- **Navigations: network first**, cache as fallback. Online you always get the
+  current version; offline you get the last one that worked.
+- **Assets: stale-while-revalidate.** Instant from cache, refreshed in the
+  background.
+
+Its cache name is stamped with the commit SHA at deploy time, so each deploy gets
+its own cache and the previous one is deleted on activate. Left as a constant, a
+fix would never reach anyone.
+
+### A note on the restore link
+
+The link packs your figures into the URL **fragment**. Browsers never send the
+part after `#` to a server, so hosting the app publicly does not expose anything
+— but the link itself carries your data, so it is for bookmarking and mailing to
+yourself, not for posting. The app says so next to the button.
 
 ## Charts
 

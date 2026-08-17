@@ -6,6 +6,12 @@
 <title>Paycheck &amp; Finance</title>
 <meta name="description" content="Work out take-home pay from an annual salary, bonus and pre-tax deductions, for any US state.">
 <link rel="stylesheet" href="styles.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="Paycheck">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#fcfcfb" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1a1a19" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💵</text></svg>">
 </head>
 <body>
@@ -70,6 +76,12 @@
         </label>
         <button type="button" id="hl-clear" class="hl-btn is-danger">Erase everything</button>
       </div>
+
+      <p class="hl-caution">
+        A restore link has your figures packed into it. The part after the
+        <code>#</code> never reaches any server — browsers don't send it — but treat
+        the link itself like the data: bookmark it or mail it to yourself, don't post it.
+      </p>
 
       <textarea id="hl-link-box" class="hl-link-box" rows="3" readonly hidden
                 aria-label="Restore link"></textarea>
@@ -655,5 +667,14 @@
 <script src="js/life-events-ui.js"></script>
 <script src="js/health-ui.js"></script>
 <script src="js/app.js"></script>
+<script>
+// Offline support, and only over http(s) — a file:// page has no service worker
+// and registering there just throws into the console for no reason.
+if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
+  addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js').catch(function () { /* offline is optional */ });
+  });
+}
+</script>
 </body>
 </html>
